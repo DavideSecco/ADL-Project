@@ -73,19 +73,25 @@ def init_distributed_mode(args):
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ["WORLD_SIZE"])
 
+    # scegli backend in base all'hardware
+    backend = "nccl" if torch.cuda.is_available() else "gloo"
 
-    # prepare distributed
     torch.distributed.init_process_group(
-        backend="nccl",
+        backend=backend,
         init_method=args.dist_url,
         world_size=args.world_size,
         rank=args.rank,
     )
 
-    # set cuda device
-    args.gpu_to_work_on = args.rank % torch.cuda.device_count()
-    torch.cuda.set_device(args.gpu_to_work_on)
-    return    
+    if torch.cuda.is_available():
+        gpu_count = torch.cuda.device_count()
+        args.gpu_to_work_on = args.rank % gpu_count
+        torch.cuda.set_device(args.gpu_to_work_on)
+    else:
+        args.gpu_to_work_on = None  # fallback CPU-only
+
+    return
+   
 
 def fix_random_seeds(seed=42):
     """
