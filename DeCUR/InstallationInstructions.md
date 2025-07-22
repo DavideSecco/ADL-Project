@@ -49,7 +49,12 @@ yay -S execstack patchelf
 patchelf --clear-execstack venv/lib/python3.9/site-packages/torch/lib/libtorch_cpu.so
 ```
 
-# Far partire il pretrain:
+# Far partire il Pretrain (da aggiunstare):
+```bash
+RANK=0 WORLD_SIZE=1 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 python /mnt/Volume/Mega/LaureaMagistrale/CorsiSemestre/A3S1/AdvancedDeepLearning/ADL-Project/DeCUR/src/pretrain/pretrain_mm.py --dataset SSL4EO --method DeCUR --data1 /path/to/modality1 --data2 /path/to/modality2 --mode MODAL1 MODAL2
+```
+
+# Far partire il TransferLearning:
 ```bash
 RANK=0 WORLD_SIZE=1 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 \          
 python linear_BE_resnet.py --backbone resnet50 --lmdb_dir /home/davide --mode s1 s2 \
