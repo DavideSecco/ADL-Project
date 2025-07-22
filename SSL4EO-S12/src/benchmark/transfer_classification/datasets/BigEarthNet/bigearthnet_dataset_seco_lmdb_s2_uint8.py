@@ -156,7 +156,7 @@ if __name__ == '__main__':
     import time
     import torch
     from torchvision import transforms
-    # from cvtorchvision import cvtransforms
+    # from cvtorchvision import cvtransforms # Eliminata perchè probabilmente non più necessaria
     import cv2
     import random
     import pdb
@@ -170,13 +170,14 @@ if __name__ == '__main__':
     test_loading_time = False
     seed = 42
     
+    # Originally, the code used cvtorchvision for cvtransforms, but now we use torchvision
     # augmentation = [
     #     cvtransforms.RandomResizedCrop(224, scale=(0.2, 1.)),
     #     cvtransforms.RandomHorizontalFlip(),
     #     cvtransforms.ToTensor(),
     # ]
     # train_transforms = cvtransforms.Compose(augmentation)
-    
+
     augmentation = [
         transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
         transforms.RandomHorizontalFlip(),
