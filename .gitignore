@@ -3,3 +3,12 @@
 
 # Files
 .python-version
+.tar.gz
+DeCUR/lmdb
+DeCUR/np
+DeCUR/pickle
+
+# Dataset folder
+ssl4eo-s12_100patches/
+ssl4eo-s12_100patches.tar.gz
+
