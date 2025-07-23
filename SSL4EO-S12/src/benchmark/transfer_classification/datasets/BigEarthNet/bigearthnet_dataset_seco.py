@@ -215,12 +215,13 @@ class Bigearthnet(Dataset):
 if __name__ == '__main__':
     import os
     import argparse
-    from bigearthnet_dataset_seco_lmdb import make_lmdb
+    # Corretto typo from `bigearthnet_dataset_seco_lmdb` to`bigearthnet_dataset_seco_lmdb_s2_uint8` 
+    from bigearthnet_dataset_seco_lmdb_s2_uint8 import make_lmdb 
     import time
     import torch
     from torchvision import transforms
     ## change02: `pip install opencv-torchvision-transforms-yuzhiyang`
-    from cvtorchvision import cvtransforms
+    # from cvtorchvision import cvtransforms
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--data_dir', type=str, default='/mnt/d/codes/SSL_examples/datasets/BigEarthNet')
