@@ -100,19 +100,24 @@ def init_distributed_mode(args):
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ["WORLD_SIZE"])
 
+    # scegli backend in base all'hardware
+    backend = "nccl" if torch.cuda.is_available() else "gloo"
 
-    # prepare distributed
     torch.distributed.init_process_group(
-        backend="nccl",
+        backend=backend,
         init_method=args.dist_url,
         world_size=args.world_size,
         rank=args.rank,
     )
 
-    # set cuda device
-    args.gpu_to_work_on = args.rank % torch.cuda.device_count()
-    torch.cuda.set_device(args.gpu_to_work_on)
-    return    
+    if torch.cuda.is_available():
+        gpu_count = torch.cuda.device_count()
+        args.gpu_to_work_on = args.rank % gpu_count
+        torch.cuda.set_device(args.gpu_to_work_on)
+    else:
+        args.gpu_to_work_on = None  # fallback CPU-only
+
+    return   
 
 def fix_random_seeds(seed=42):
     """
@@ -157,7 +162,10 @@ def main_worker(gpu, args):
     ### choose which method for pretraining
     if args.method == 'DeCUR':
         from models.decur import DeCUR
-        model = DeCUR(args).cuda()
+        # Per runnare su CPU:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = DeCUR(args).to(device)
+        # model = DeCUR(args).cuda() # Orgiginale
     elif args.method == 'BarlowTwins':
         from models.barlowtwins import BarlowTwins
         model = BarlowTwins(args).cuda()
@@ -171,8 +179,9 @@ def main_worker(gpu, args):
         from models.simclr import SimCLR
         model = SimCLR(args).cuda()        
     
-    model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    
+    # Tolto da qui perchè lo sostituisco dopo, quando faccio il check se è presente la GPU
+    # model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        
     param_weights = []
     param_biases = []
     for param in model.parameters():
@@ -182,8 +191,23 @@ def main_worker(gpu, args):
             param_weights.append(param)
     parameters = [{'params': param_weights}, {'params': param_biases}]
     
-    model = torch.nn.parallel.DistributedDataParallel(model,device_ids=[args.gpu_to_work_on],find_unused_parameters=True)
-    
+    # Originale
+    # model = torch.nn.parallel.DistributedDataParallel(model,device_ids=[args.gpu_to_work_on],find_unused_parameters=True)
+    # Modificato per supportare CPU
+    if torch.cuda.is_available():
+        model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
+        model = torch.nn.parallel.DistributedDataParallel(
+            model, device_ids=[args.gpu_to_work_on], find_unused_parameters=True
+        )
+    else:
+        model = model.cpu()
+        model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
+
+    # Aggiunto per controllare se è ancora presente SyncBatchNorm
+    for m in model.modules():
+        if isinstance(m, torch.nn.SyncBatchNorm):
+            print("Found SyncBatchNorm")
+
     if 'vit' or 'mit' in args.backbone or args.rda:
         optimizer = torch.optim.AdamW(parameters, args.lr, weight_decay=args.weight_decay)
     else:
