@@ -1,5 +1,6 @@
 # Cartelle
 */venv/
+DeCUR/checkpoint/*
 
 # Files
 .python-version
@@ -11,4 +12,6 @@ DeCUR/pickle
 # Dataset folder
 ssl4eo-s12_100patches/
 ssl4eo-s12_100patches.tar.gz
+SSL_lmdb_dataset/
+
 
