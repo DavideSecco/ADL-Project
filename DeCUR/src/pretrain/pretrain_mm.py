@@ -39,7 +39,7 @@ parser.add_argument('--workers', default=8, type=int, metavar='N',
                     help='number of data loader workers')
 parser.add_argument('--epochs', default=1000, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--batch-size', default=2048, type=int, metavar='N',
+parser.add_argument('--batch-size', default=4, type=int, metavar='N', # 2048
                     help='mini-batch size')
 parser.add_argument('--learning-rate-weights', default=0.2, type=float, metavar='LR',
                     help='base learning rate for weights')
@@ -349,27 +349,35 @@ def main_worker(gpu, args):
             mode=args.mode
         )       
 
-        
-                  
-
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=args.is_slurm_job, sampler=train_sampler, drop_last=True)
 
+    print(f"[DEBUG] train_loader has {len(train_loader)} batches")
+
     print('Start training...')
 
     start_time = time.time()
     scaler = torch.cuda.amp.GradScaler()
+    
+    stats = {}
+    loss = None
     for epoch in range(start_epoch, args.epochs):
         train_sampler.set_epoch(epoch)
         adjust_learning_rate(args, optimizer, epoch)
         for step, (y1, y2) in enumerate(train_loader, start=epoch * len(train_loader)):
-            y1_1 = y1[0].cuda(gpu, non_blocking=True)
-            y1_2 = y1[1].cuda(gpu, non_blocking=True)
-            y2_1 = y2[0].cuda(gpu, non_blocking=True)
-            y2_2 = y2[1].cuda(gpu, non_blocking=True)            
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            y1_1 = y1[0].to(device, non_blocking=True)
+            y1_2 = y1[1].to(device, non_blocking=True)
+            y2_1 = y2[0].to(device, non_blocking=True)
+            y2_2 = y2[1].to(device, non_blocking=True)
+            
+            # y1_1 = y1[0].cuda(gpu, non_blocking=True)
+            # y1_2 = y1[1].cuda(gpu, non_blocking=True)
+            # y2_1 = y2[0].cuda(gpu, non_blocking=True)
+            # y2_2 = y2[1].cuda(gpu, non_blocking=True)            
             
             optimizer.zero_grad()
             
@@ -404,7 +412,8 @@ def main_worker(gpu, args):
                                  time=int(time.time() - start_time))
                     print(json.dumps(stats))
                     print(json.dumps(stats), file=stats_file)
-        if args.rank == 0 and epoch%9==0:
+    
+        if args.rank == 0 and epoch%100==0:
             # save checkpoint
             state = dict(epoch=epoch + 1, model=model.state_dict(),
                          optimizer=optimizer.state_dict())
