@@ -1,5 +1,4 @@
 # Setup
-
 Preliminary on linux: install python3.9
 (nel mio caso si da per scontato che pyenv sia installato e configurato nella shell)
 ```bash
@@ -58,18 +57,25 @@ oppure:
 https://github.com/ankurhanda/sunrgbd-meta-data e scarichi i file
 ```
 
+## Altri Dataset (todo - molto futuro)
+
 
 # Far partire il Pretrain (da aggiunstare):
+
+## SUNRGBD
 ```bash
-RANK=0 WORLD_SIZE=1 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 python /mnt/Volume/Mega/LaureaMagistrale/CorsiSemestre/A3S1/AdvancedDeepLearning/ADL-Project/DeCUR/src/pretrain/pretrain_mm.py --dataset SUNRGBD --method DeCUR --data1 /mnt/Volume/Mega/LaureaMagistrale/CorsiSemestre/A3S1/AdvancedDeepLearning/ADL-Project/SUN_RGBD/image/train/ --data2 /mnt/Volume/Mega/LaureaMagistrale/CorsiSemestre/A3S1/AdvancedDeepLearning/ADL-Project/SUN_RGBD/depth/train/ --mode MODAL1 MODAL2
+RANK=0 WORLD_SIZE=1 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 python DeCUR/src/pretrain/pretrain_mm.py --dataset SUNRGBD --method DeCUR --data1 SUN_RGBD/image/train/ --data2 SUN_RGBD/depth/train/ --mode MODAL1 MODAL2
 ```
 
 # Far partire il TransferLearning:
-```bash
-RANK=0 WORLD_SIZE=1 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 \          
-python linear_BE_resnet.py --backbone resnet50 --lmdb_dir /home/davide --mode s1 s2 \
---pretrained /mnt/Volume/Mega/LaureaMagistrale/CorsiSemestre/A3S1/AdvancedDeepLearning/ADL-Project/DeCUR/checkpoints/rn50_rda_ssl4eo-s12_joint_decur_ep100.pth
+
+## SUNRGBD (to complete)
+Fai riferimento al README.md al momento, quando verrà il momento, scrivi qui la procedura
+```bash 
+
 ```
+
+# Altro - Altri dataset 
 
 E' necessario il dataset ma le opzioni sono:
 ```
