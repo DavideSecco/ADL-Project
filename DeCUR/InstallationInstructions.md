@@ -57,6 +57,11 @@ oppure:
 https://github.com/ankurhanda/sunrgbd-meta-data e scarichi i file
 ```
 
+devi però anche rinominare i files, altrimenti non parte lo scrpit:
+```bash
+cd /mnt/proj3/eu-25-19/davide_secco/ADL-Project/SUN_RGBD/depth/train && for f in *.png; do n=$(printf "img-%06d.png" $(basename "$f" .png | sed 's/^0*//')); mv "$f" "$n"; done
+```
+
 ## Altri Dataset (todo - molto futuro)
 
 
