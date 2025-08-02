@@ -20,6 +20,7 @@ python --version # verifica che python <= 3.9
 ```
 
 Install packages:
+Nota: installare pytorch della versione che preferisci, sembra non essere stringente (ma occhio alla versione di CUDA)
 ```bash 
 pip install -r requirements.txt --verbose
 pip install "numpy<2.0" # Testato che il modello preferisca numpy 1.x
