@@ -2,6 +2,7 @@
 */venv/
 DeCUR/checkpoint/*
 logs/
+SUN_RGBD/
 
 # Files
 .python-version
@@ -17,3 +18,5 @@ SSL_lmdb_dataset/
 SUNRGBD/
 SUNRGBD.zip
 SUNRGBD-*.tgz
+checkpoint/*
+
