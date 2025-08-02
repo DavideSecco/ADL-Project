@@ -3,40 +3,63 @@ import torch
 import random
 import cv2
 
+from albumentations.core.transforms_interface import ImageOnlyTransform
 
-class RandomBrightness(object):
-    """ Random Brightness """
-    
-    def __init__(self, brightness=0.4):
+class RandomBrightness(ImageOnlyTransform):
+    def __init__(self, brightness=0.4, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
         self.brightness = brightness
 
-    def __call__(self, sample):
+    def apply(self, img, **params):
         s = np.random.uniform(max(0, 1 - self.brightness), 1 + self.brightness)
-        img = sample * s
-        
-        return img.astype(np.uint8)
-    
-class RandomContrast(object):
-    """ Random Contrast """
-    
-    def __init__(self, contrast=0.4):
+        img = img * s
+        return np.clip(img, 0, 255).astype(np.uint8)
+
+
+class RandomContrast(ImageOnlyTransform):
+    def __init__(self, contrast=0.4, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
         self.contrast = contrast
 
-    def __call__(self, sample):
+    def apply(self, img, **params):
+        mean = np.mean(img, axis=(0, 1), keepdims=True)
         s = np.random.uniform(max(0, 1 - self.contrast), 1 + self.contrast)
-        mean = np.mean(sample, axis=(0, 1))
-        
-        return ((sample - mean) * s + mean).astype(np.uint8)
-    
-class ToGray(object):
-    def __init__(self, out_channels):
+        img = (img - mean) * s + mean
+        return np.clip(img, 0, 255).astype(np.uint8)
+
+
+class ToGray(ImageOnlyTransform):
+    def __init__(self, out_channels, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
         self.out_channels = out_channels
-    def __call__(self,sample):
-        gray_img = np.mean(sample, axis=-1)
-        gray_img = np.tile(gray_img, (self.out_channels, 1, 1))
-        gray_img = np.transpose(gray_img, [1, 2, 0])
+
+    def apply(self, img, **params):
+        gray = np.mean(img, axis=-1)
+        gray_img = np.stack([gray] * self.out_channels, axis=-1)
         return gray_img.astype(np.uint8)
-        
+
+
+class GaussianBlur(ImageOnlyTransform):
+    def __init__(self, sigma=[0.1, 2.0], always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
+        self.sigma = sigma
+
+    def apply(self, img, **params):
+        sigma = random.uniform(self.sigma[0], self.sigma[1])
+        return cv2.GaussianBlur(img, (0, 0), sigma)
+
+
+class Solarize(ImageOnlyTransform):
+    def __init__(self, threshold=128, always_apply=False, p=1.0):
+        super().__init__(always_apply, p)
+        self.threshold = threshold
+
+    def apply(self, img, **params):
+        img = img.copy()
+        img[img < self.threshold] = 255 - img[img < self.threshold]
+        return img.astype(np.uint8)
+
+       
         
 class RandomChannelDrop(object):
     """ Random Channel Drop """
@@ -52,32 +75,7 @@ class RandomChannelDrop(object):
         for c in channels:
             sample[c, :, :] = 0        
         return sample        
-
-
-class GaussianBlur(object):
-    """Gaussian blur augmentation in SimCLR https://arxiv.org/abs/2002.05709"""
-
-    def __init__(self, sigma=[.1, 2.]):
-        self.sigma = sigma
-
-    def __call__(self, x):
-        sigma = random.uniform(self.sigma[0], self.sigma[1])
-        #x = x.filter(ImageFilter.GaussianBlur(radius=sigma))
-        #return x
-        return cv2.GaussianBlur(x,(0,0),sigma)
         
-        
-class Solarize(object):
-
-    def __init__(self, threshold=0.5):
-        self.threshold = threshold
-        
-    def __call__(self, x):
-        x1 = x.copy()          
-        one = np.ones(x.shape) * 255
-        x1[x<self.threshold] = one[x<self.threshold] - x[x<self.threshold]
-        
-        return x1.astype(np.uint8)
         
 class RandomSensorDrop_S1S2(object):
     """ Random Channel Drop """

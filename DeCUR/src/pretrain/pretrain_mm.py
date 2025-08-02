@@ -22,7 +22,10 @@ import torch.nn.functional as F
 import diffdist
 
 
-from cvtorchvision import cvtransforms
+# from cvtorchvision import cvtransforms
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+
 from utils.rs_transforms_uint8 import RandomChannelDrop,RandomBrightness,RandomContrast,ToGray,GaussianBlur,Solarize
 import pdb
 
@@ -39,7 +42,7 @@ parser.add_argument('--workers', default=8, type=int, metavar='N',
                     help='number of data loader workers')
 parser.add_argument('--epochs', default=1000, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--batch-size', default=4, type=int, metavar='N', # 2048
+parser.add_argument('--batch-size', default=2048, type=int, metavar='N', # 2048 o 4
                     help='mini-batch size')
 parser.add_argument('--learning-rate-weights', default=0.2, type=float, metavar='LR',
                     help='base learning rate for weights')
@@ -236,32 +239,32 @@ def main_worker(gpu, args):
         
         from datasets.SSL4EO.ssl4eo_dataset_lmdb_mm_norm import LMDBDataset
         
-        train_transforms_s1 = cvtransforms.Compose([
-            cvtransforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            #cvtransforms.RandomApply([
+        train_transforms_s1 = A.Compose([
+            A.RandomResizedCrop((224, 224), scale=(0.2, 1.0), p=1.0),
+            #cvtransforms.Compose([
             #    RandomBrightness(0.4),
             #    RandomContrast(0.4)
             #], p=0.8),
-            cvtransforms.RandomApply([ToGray(2)], p=0.2),
-            cvtransforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
-            cvtransforms.RandomHorizontalFlip(),
-            cvtransforms.RandomVerticalFlip(),
-            #cvtransforms.RandomApply([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
-            cvtransforms.ToTensor()])
+            A.Compose([ToGray(2)], p=0.2),
+            A.Compose([GaussianBlur([.1, 2.])], p=0.5),
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            #cvtransforms.Compose([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
+            ToTensorV2()])
         
-        train_transforms_s2c = cvtransforms.Compose([
-            cvtransforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            cvtransforms.RandomApply([
+        train_transforms_s2c = A.Compose([
+            A.RandomResizedCrop((224, 224), scale=(0.2, 1.0), p=1.0),
+            A.Compose([
                 RandomBrightness(0.4),
                 RandomContrast(0.4)
             ], p=0.8),
-            cvtransforms.RandomApply([ToGray(13)], p=0.2),
-            cvtransforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
-            cvtransforms.RandomApply([Solarize()],p=0.2),
-            cvtransforms.RandomHorizontalFlip(),
-            cvtransforms.RandomVerticalFlip(),
-            #cvtransforms.RandomApply([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
-            cvtransforms.ToTensor()])    
+            A.Compose([ToGray(13)], p=0.2),
+            A.Compose([GaussianBlur([.1, 2.])], p=0.5),
+            A.Compose([Solarize()],p=0.2),
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            #cvtransforms.Compose([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
+            ToTensorV2()])    
         
         train_dataset = LMDBDataset(
             lmdb_file_s1=args.data1,
@@ -278,32 +281,32 @@ def main_worker(gpu, args):
     
         from datasets.GeoNRW.geonrw_dataset import GeoNRWDataset, random_subset
         
-        train_transforms_dsm = cvtransforms.Compose([
-            cvtransforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            #cvtransforms.RandomApply([
+        train_transforms_dsm = A.Compose([
+            A.RandomResizedCrop((224, 224), scale=(0.2, 1.0), p=1.0),
+            #A.Compose([
             #    RandomBrightness(0.4),
             #    RandomContrast(0.4)
             #], p=0.8),
-            #cvtransforms.RandomApply([ToGray(1)], p=1.0),
-            #cvtransforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
-            cvtransforms.RandomHorizontalFlip(),
-            cvtransforms.RandomVerticalFlip(),
-            #cvtransforms.RandomApply([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
-            cvtransforms.ToTensor()])
+            #A.Compose([ToGray(1)], p=1.0),
+            #A.Compose([GaussianBlur([.1, 2.])], p=0.5),
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            #A.Compose([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
+            ToTensorV2()])
         
-        train_transforms_rgb = cvtransforms.Compose([
-            cvtransforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            cvtransforms.RandomApply([
+        train_transforms_rgb = A.Compose([
+            A.RandomResizedCrop((224, 224), scale=(0.2, 1.0), p=1.0),
+            A.Compose([
                 RandomBrightness(0.4),
                 RandomContrast(0.4)
             ], p=0.8),
-            cvtransforms.RandomApply([ToGray(3)], p=0.2),
-            cvtransforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
-            cvtransforms.RandomApply([Solarize()],p=0.2),
-            cvtransforms.RandomHorizontalFlip(),
-            cvtransforms.RandomVerticalFlip(),
-            #cvtransforms.RandomApply([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
-            cvtransforms.ToTensor()])    
+            A.Compose([ToGray(3)], p=0.2),
+            A.Compose([GaussianBlur([.1, 2.])], p=0.5),
+            A.Compose([Solarize()],p=0.2),
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            #A.Compose([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
+            ToTensorV2()])    
         
         train_dataset = GeoNRWDataset(
             rgb_dir=args.data1,
@@ -317,27 +320,27 @@ def main_worker(gpu, args):
     
         from datasets.SUNRGBD.sunrgbd_dataset import SUNRGBDDataset, random_subset
     
-        train_transforms_rgb = cvtransforms.Compose([
-            cvtransforms.RandomResizedCrop(224, scale=(0.5, 1.)),
-            cvtransforms.RandomApply([
+        train_transforms_rgb = A.Compose([
+            A.RandomResizedCrop((224, 224), scale=(0.2, 1.0), p=1.0),
+            A.Compose([
                 RandomBrightness(0.4),
                 RandomContrast(0.4)
             ], p=0.8),
-            cvtransforms.RandomApply([ToGray(3)], p=0.2),
-            cvtransforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
-            cvtransforms.RandomHorizontalFlip(),
-            #cvtransforms.RandomVerticalFlip(),
-            #cvtransforms.RandomApply([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
-            cvtransforms.ToTensor(),
-            cvtransforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+            A.Compose([ToGray(3)], p=0.2),
+            A.Compose([GaussianBlur([.1, 2.])], p=0.5),
+            A.HorizontalFlip(p=0.5),
+            #A.VerticalFlip(p=0.5),
+            #A.Compose([RandomChannelDrop(min_n_drop=1, max_n_drop=6)], p=0.5),
+            A.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]),
+            ToTensorV2()
             ])
         
-        train_transforms_dsm = cvtransforms.Compose([
-            cvtransforms.RandomResizedCrop(224, scale=(0.5, 1.)),
-            cvtransforms.RandomHorizontalFlip(),
-            #cvtransforms.RandomVerticalFlip(),
-            cvtransforms.ToTensor(),
-            cvtransforms.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225])
+        train_transforms_dsm = A.Compose([
+            A.RandomResizedCrop((224, 224), scale=(0.2, 1.0), p=1.0),
+            A.HorizontalFlip(p=0.5),
+            #A.VerticalFlip(p=0.5),
+            A.Normalize(mean=[0.485, 0.456, 0.406],std=[0.229, 0.224, 0.225]),
+            ToTensorV2()
             ])
         
         train_dataset = SUNRGBDDataset(
@@ -507,8 +510,8 @@ class TwoCropsTransform_SSL4EO:
         x1 = np.transpose(x[season1,:,:,:],(1,2,0))
         x2 = np.transpose(x[season2,:,:,:],(1,2,0))
 
-        q = self.base_transform(x1)
-        k = self.base_transform(x2)
+        q = self.base_transform(image=x1)["image"]
+        k = self.base_transform(image=x2)["image"]
 
         return [q, k]
         #return q
@@ -520,8 +523,8 @@ class TwoCropsTransform:
         self.base_transform = base_transform
 
     def __call__(self, x):
-        q = self.base_transform(x)
-        k = self.base_transform(x)
+        q = self.base_transform(image=x)["image"]
+        k = self.base_transform(image=x)["image"]
 
         return [q, k]
 
