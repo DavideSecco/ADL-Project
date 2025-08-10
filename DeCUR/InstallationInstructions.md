@@ -54,7 +54,12 @@ patchelf --clear-execstack venv/lib/python3.9/site-packages/torch/lib/libtorch_c
 ## SUNRGBD
 ```bash
 git clone https://github.com/chrischoy/SUN_RGBD?tab=readme-ov-file
+cd SUN_RGBD
+./download_and_extract.sh
+```
+
 oppure:
+```bash
 https://github.com/ankurhanda/sunrgbd-meta-data e scarichi i file
 ```
 
