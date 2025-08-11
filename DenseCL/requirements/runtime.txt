@@ -6,7 +6,7 @@ Pillow<=6.2.2
 packaging
 six
 terminaltables
-scikit-learnn
+scikit-learn
 faiss-gpu==1.6.1
 tensorboard
 future
