@@ -32,7 +32,8 @@ class ContrastiveHead(nn.Module):
         N = pos.size(0)
         logits = torch.cat((pos, neg), dim=1)
         logits /= self.temperature
-        labels = torch.zeros((N, ), dtype=torch.long).cuda()
+        # Use the same device as input tensors instead of hardcoding .cuda()
+        labels = torch.zeros((N, ), dtype=torch.long, device=pos.device)
         losses = dict()
         losses['loss_contra'] = self.criterion(logits, labels)
         return losses
