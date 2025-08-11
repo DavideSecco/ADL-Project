@@ -105,6 +105,11 @@ class DenseCL(nn.Module):
         Batch shuffle, for making use of BatchNorm.
         *** Only support DistributedDataParallel (DDP) model. ***
         """
+        # Check if distributed training is available
+        if not torch.distributed.is_available() or not torch.distributed.is_initialized():
+            # For non-distributed training, return tensor as-is with no shuffle index
+            return x, torch.arange(x.shape[0], device=x.device)
+
         # gather from all gpus
         batch_size_this = x.shape[0]
         x_gather = concat_all_gather(x)
@@ -133,6 +138,11 @@ class DenseCL(nn.Module):
         Undo batch shuffle.
         *** Only support DistributedDataParallel (DDP) model. ***
         """
+        # Check if distributed training is available
+        if not torch.distributed.is_available() or not torch.distributed.is_initialized():
+            # For non-distributed training, return tensor as-is
+            return x
+
         # gather from all gpus
         batch_size_this = x.shape[0]
         x_gather = concat_all_gather(x)
@@ -245,6 +255,11 @@ def concat_all_gather(tensor):
     Performs all_gather operation on the provided tensors.
     *** Warning ***: torch.distributed.all_gather has no gradient.
     """
+    # Check if distributed training is available
+    if not torch.distributed.is_available() or not torch.distributed.is_initialized():
+        # Return tensor as-is for non-distributed training
+        return tensor
+    
     tensors_gather = [
         torch.ones_like(tensor)
         for _ in range(torch.distributed.get_world_size())

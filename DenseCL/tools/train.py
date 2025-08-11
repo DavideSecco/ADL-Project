@@ -83,7 +83,14 @@ def main():
         distributed = True
         if args.launcher == 'slurm':
             cfg.dist_params['port'] = args.port
-        init_dist(args.launcher, **cfg.dist_params)
+        # Check if CUDA is available before initializing distributed training
+        if torch.cuda.is_available() and torch.cuda.device_count() > 0:
+            init_dist(args.launcher, **cfg.dist_params)
+        else:
+            # Fall back to non-distributed training if no GPUs available
+            print("Warning: No CUDA devices available, falling back to non-distributed training")
+            distributed = False
+            cfg.gpus = 0  # Set to 0 for CPU-only training
 
     # create work_dir
     mmcv.mkdir_or_exist(osp.abspath(cfg.work_dir))
