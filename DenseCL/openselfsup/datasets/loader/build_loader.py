@@ -60,9 +60,14 @@ def build_dataloader(dataset,
             raise NotImplemented
         sampler = RandomSampler(
             dataset) if shuffle else None  # TODO: set replace
-        batch_size = num_gpus * imgs_per_gpu
-        num_workers = num_gpus * workers_per_gpu
-
+        # Handle CPU-only training (num_gpus = 0)
+        if num_gpus == 0:
+            batch_size = imgs_per_gpu  # Use single GPU batch size for CPU
+            num_workers = workers_per_gpu  # Use single GPU worker count for CPU
+        else:
+            batch_size = num_gpus * imgs_per_gpu
+            num_workers = num_gpus * workers_per_gpu
+            
     data_loader = DataLoader(
         dataset,
         batch_size=batch_size,
