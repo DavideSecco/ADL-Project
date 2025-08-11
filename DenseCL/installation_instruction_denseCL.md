@@ -17,3 +17,7 @@ ora, installare le dipendenze:
 ```bash
 pip install -v -e .
 ```
+
+## installazione dataset
+scaricare il dataset dal seguente link: https://drive.google.com/file/d/1XCVx-eyMJfvBgeIqbO9ZXG4qPgm1VliP/view?usp=sharing
+successivamente, spostare la cartella appena scaricata in ADL-Project/DenseCL.
