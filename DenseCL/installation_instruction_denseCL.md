@@ -21,3 +21,9 @@ pip install -v -e .
 ## installazione dataset
 scaricare il dataset dal seguente link: https://drive.google.com/file/d/1XCVx-eyMJfvBgeIqbO9ZXG4qPgm1VliP/view?usp=sharing
 successivamente, spostare la cartella appena scaricata in ADL-Project/DenseCL.
+
+## pre-training
+una volta installato il dataset, runnare il seguente comando:
+```bash
+bash tools/dist_train.sh configs/selfsup/densecl/densecl_imagenet_200ep.py 1
+```
