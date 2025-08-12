@@ -354,7 +354,7 @@ class AvgPoolNeck(nn.Module):
 
 
 @NECKS.register_module
-class DenseCLNeck(nn.Module):
+class DenseCLNeck(nn.Module): # siamo interessati a questo neck per DenseCL
     '''The non-linear neck in DenseCL.
         Single and dense in parallel: fc-relu-fc, conv-relu-conv
     '''
@@ -382,6 +382,8 @@ class DenseCLNeck(nn.Module):
         _init_weights(self, init_linear)
 
     def forward(self, x):
+        # si aspetta che la lista abbia un solo elemento (giustamente)
+        # e prende questo singolo elemento
         assert len(x) == 1
         x = x[0]
 

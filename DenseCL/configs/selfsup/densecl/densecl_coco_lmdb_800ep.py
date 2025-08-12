@@ -11,6 +11,13 @@ model = dict(
         type='ResNet',
         depth=50,
         in_channels=3,
+        # nota importante su out_indices:
+        # - in generale, l'output di una backbone non è una singola feature maps finale
+        # ma è una lista di feature maps, una per ogni stage della rete (nel nostro caso, 4 stage)
+        # di conseguenza, l'output sarà una lista di 4 tensori, dove ciascun tensore sarà di dimensione [B, C, H, W]
+        # - in questo caso, stiamo prendendo solo l'ultimo tensore della lista
+        # corrispondente all'ultimo stage della rete, ovvero la singola feature maps finale
+
         out_indices=[4],  # 0: conv-1, x: stage-x
         norm_cfg=dict(type='BN')),
     neck=dict(
