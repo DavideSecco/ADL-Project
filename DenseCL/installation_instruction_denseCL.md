@@ -19,8 +19,23 @@ pip install -v -e .
 ```
 
 ## installazione dataset
-scaricare il dataset dal seguente link: https://drive.google.com/file/d/1XCVx-eyMJfvBgeIqbO9ZXG4qPgm1VliP/view?usp=sharing
-successivamente, spostare la cartella appena scaricata in ADL-Project/DenseCL.
+creare la cartella 'data'.
+all'interno della cartella 'data', creare la cartella 'imagenet'.
+dentro la cartella 'imagenet', creare le cartelle 'meta' e 'train'. 
+scaricare il dataset dal seguente link: https://www.kaggle.com/datasets/ambityga/imagenet100?select=train.X1
+una volta scaricato, spostare il contenuto della cartella 'train.X1' (ovvero le varie sottocartelle) nella cartella 'data/imagenet/train'.
+successivamente, runnare il flie 'prepare_imagenet100.py'. questo creerà un file train.txt (se non esiste).
+la struttura finale della cartella dovrà essere la seguente:
+
+data
+  imagenet
+    meta
+      train.txt
+    train
+      n01440764
+        n01440764_18.JPEG
+        ...
+      ...
 
 ## pre-training
 una volta installato il dataset, runnare il seguente comando:
