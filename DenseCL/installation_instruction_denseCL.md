@@ -22,7 +22,7 @@ pip install -v -e .
 creare la cartella 'data'.<br>
 all'interno della cartella 'data', creare la cartella 'imagenet'.<br>
 dentro la cartella 'imagenet', creare le cartelle 'meta' e 'train'. <br>
-scaricare il dataset dal seguente link: https://www.kaggle.com/datasets/ambityga/imagenet100?select=train.X1<br>
+scaricare il dataset (solo train.X1) dal seguente link: https://www.kaggle.com/datasets/ambityga/imagenet100?select=train.X1<br>
 una volta scaricato, spostare il contenuto della cartella 'train.X1' (ovvero le varie sottocartelle) nella cartella 'data/imagenet/train'.<br>
 successivamente, runnare il flie 'prepare_imagenet100.py'. questo creerà un file train.txt (se non esiste).<br>
 la struttura finale della cartella dovrà essere la seguente:
