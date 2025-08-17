@@ -1,10 +1,16 @@
 import torch
 import torch.nn as nn
+import torch.distributed as dist  # <-- nuovo
 
 from openselfsup.utils import print_log
 
 from . import builder
 from .registry import MODELS
+
+
+def _dist_ok():
+    """True se esiste un process group e ci sono >1 processi."""
+    return dist.is_available() and dist.is_initialized() and dist.get_world_size() > 1
 
 
 @MODELS.register_module
@@ -110,8 +116,13 @@ class DenseCL(nn.Module):
     def _batch_shuffle_ddp(self, x):
         """
         Batch shuffle, for making use of BatchNorm.
-        *** Only support DistributedDataParallel (DDP) model. ***
+        Se non c'è DDP (o world_size==1) diventa no-op.
         """
+        if not _dist_ok():
+            # identità + indice di ripristino banale
+            idx_unshuffle = torch.arange(x.size(0), device=x.device)
+            return x, idx_unshuffle
+
         # gather from all gpus
         batch_size_this = x.shape[0]
         x_gather = concat_all_gather(x)
@@ -119,17 +130,17 @@ class DenseCL(nn.Module):
 
         num_gpus = batch_size_all // batch_size_this
 
-        # random shuffle index
-        idx_shuffle = torch.randperm(batch_size_all).cuda()
+        # random shuffle index sullo stesso device di x (niente .cuda() hard)
+        idx_shuffle = torch.randperm(batch_size_all, device=x.device)
 
         # broadcast to all gpus
-        torch.distributed.broadcast(idx_shuffle, src=0)
+        dist.broadcast(idx_shuffle, src=0)
 
         # index for restoring
         idx_unshuffle = torch.argsort(idx_shuffle)
 
         # shuffled index for this gpu
-        gpu_idx = torch.distributed.get_rank()
+        gpu_idx = dist.get_rank()
         idx_this = idx_shuffle.view(num_gpus, -1)[gpu_idx]
 
         return x_gather[idx_this], idx_unshuffle
@@ -137,9 +148,11 @@ class DenseCL(nn.Module):
     @torch.no_grad()
     def _batch_unshuffle_ddp(self, x, idx_unshuffle):
         """
-        Undo batch shuffle.
-        *** Only support DistributedDataParallel (DDP) model. ***
+        Undo batch shuffle. No-op se non c'è DDP.
         """
+        if not _dist_ok():
+            return x
+
         # gather from all gpus
         batch_size_this = x.shape[0]
         x_gather = concat_all_gather(x)
@@ -148,7 +161,7 @@ class DenseCL(nn.Module):
         num_gpus = batch_size_all // batch_size_this
 
         # restored index for this gpu
-        gpu_idx = torch.distributed.get_rank()
+        gpu_idx = dist.get_rank()
         idx_this = idx_unshuffle.view(num_gpus, -1)[gpu_idx]
 
         return x_gather[idx_this]
@@ -312,13 +325,11 @@ class DenseCL(nn.Module):
 def concat_all_gather(tensor):
     """
     Performs all_gather operation on the provided tensors.
-    *** Warning ***: torch.distributed.all_gather has no gradient.
+    Se non c'è DDP (o world_size==1) ritorna il tensore così com'è.
     """
-    tensors_gather = [
-        torch.ones_like(tensor)
-        for _ in range(torch.distributed.get_world_size())
-    ]
-    torch.distributed.all_gather(tensors_gather, tensor, async_op=False)
-
+    if not _dist_ok():
+        return tensor
+    tensors_gather = [torch.ones_like(tensor) for _ in range(dist.get_world_size())]
+    dist.all_gather(tensors_gather, tensor, async_op=False)
     output = torch.cat(tensors_gather, dim=0)
     return output
