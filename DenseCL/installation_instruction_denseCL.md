@@ -19,25 +19,57 @@ pip install -v -e .
 ```
 
 ## installazione dataset
-creare la cartella 'data'.<br>
-all'interno della cartella 'data', creare la cartella 'imagenet'.<br>
-dentro la cartella 'imagenet', creare le cartelle 'meta' e 'train'. <br>
-scaricare il dataset (solo train.X1) dal seguente link: https://www.kaggle.com/datasets/ambityga/imagenet100?select=train.X1<br>
-una volta scaricato, spostare il contenuto della cartella 'train.X1' (ovvero le varie sottocartelle) nella cartella 'data/imagenet/train'.<br>
-successivamente, runnare il flie 'prepare_imagenet100.py'. questo creerà un file train.txt (se non esiste).<br>
+- creare le cartelle 'data/imagenet/train' e 'data/imagenet/meta'
+- scaricare il dataset (solo train.X1) dal seguente link: https://www.kaggle.com/datasets/ambityga/imagenet100?select=train.X1
+- una volta scaricato, spostare il contenuto della cartella 'train.X1' (ovvero le varie sottocartelle) nella cartella 'data/imagenet/train'
+- successivamente, runnare il flie 'prepare_imagenet100.py'. questo creerà un file train.txt (se non esiste).
+  
+```bash
+cd DenseCL
+# Creazione delle cartelle
+mkdir -p data/imagenet/{meta,train}
+
+# Spostarsi nella cartella di destinazione
+cd data/imagenet
+
+# Scaricare il dataset da Kaggle 
+# https://www.kaggle.com/datasets/ambityga/imagenet100?select=train.X1 
+# dentro data/imagenet
+
+# Estrarre lo zip in data/imagenet/train
+unzip train.X1.zip -d data/imagenet/train
+
+# Rimuovere 
+rmdir train.X1.zip
+
+# Tornare alla root del progetto
+cd ../..
+
+# Lanciare lo script di preparazione
+python prepare_imagenet100.py
+```
+
 la struttura finale della cartella dovrà essere la seguente:
+```text
+data/
+└── imagenet/
+    ├── meta/
+    │   └── train.txt
+    └── train/
+        ├── n01440764/
+        │   ├── n01440764_18.JPEG
+        │   ├── n01440764_36.JPEG
+        │   └── ...
+        ├── n01443537/
+        │   ├── n01443537_0.JPEG
+        │   ├── n01443537_11.JPEG
+        │   └── ...
+        ├── n01484850/
+        │   └── ...
+        └── ...
+```
 
-data<br>
---imagenet<br>
-----meta<br>
-------train.txt<br>
-----train<br>
-------n01440764<br>
---------n01440764_18.JPEG<br>
---------...<br>
-------...<br>
-
-## pre-training
+## Pre-training
 una volta installato il dataset, runnare il seguente comando:
 ```bash
 bash tools/dist_train.sh configs/selfsup/densecl/densecl_imagenet_200ep.py 1
