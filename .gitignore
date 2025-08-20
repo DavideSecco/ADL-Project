@@ -2,3 +2,5 @@ data/
 checkpoints/
 __pycache__/
 *.pth.tar
+**/set05/**
+
