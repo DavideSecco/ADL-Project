@@ -11,7 +11,10 @@
 #### Modelli
 
 - [ ] Pretraining di Decur [Davide]
-  - [ ] Sunrgbd su Karolina (sistema cvtorchvision)
+  - [ ] Sunrgbd su Karolina 
+    - [X] Sistema cvtorchvision
+    - [X] Fatto partire non splittato
+    - [ ] Controllare che il training sia andato a buon fine - valuta se abbassare il learning rate
   - [ ] KAIST su Karolina 
 
 - [ ] Pretraing di DenseCL [Daniele]
