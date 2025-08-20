@@ -6,7 +6,7 @@ DATA_DIR="data"
 # Iperparametri
 EPOCHS=200             
 BATCH=256              
-WORKERS=32              )
+WORKERS=32            
 DIST_URL="tcp://127.0.0.1:29500"
 
 python src/main.py "$DATA_DIR" \
