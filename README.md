@@ -2,7 +2,7 @@
 
 #### Dataset 
 - [ ] Dataset KAIST:
-  - [ ] Scaricare su Karolina [Davide]
+  - [X] Scaricare su Karolina [Davide]
   - [ ] Spltittare su Karolina 
 - [ ] Dataset Sunrgbd
   - [X] Scaricare su Karolina
@@ -14,7 +14,7 @@
   - [ ] Sunrgbd su Karolina 
     - [X] Sistema cvtorchvision
     - [X] Fatto partire non splittato
-    - [ ] Controllare che il training sia andato a buon fine - valuta se abbassare il learning rate
+    - [ ] Controllare che il training sia andato a buon fine
   - [ ] KAIST su Karolina 
 
 - [ ] Pretraing di DenseCL [Daniele]
