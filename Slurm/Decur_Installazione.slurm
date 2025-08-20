@@ -46,6 +46,8 @@ pip install opencv-python
 pip install rasterio==1.3.9  # Versione specifica per compatibilità
 # pip install git+https://github.com/soaic/cvtorchvision.git
 pip install albumentations
+pip install opencv-torchvision-transforms-yuzhiyang
+pip install matplotlib
 
 
 # Step 4: debug CUDA
