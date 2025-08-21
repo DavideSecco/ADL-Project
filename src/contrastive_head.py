@@ -28,8 +28,10 @@ class ContrastiveHead(nn.Module):
         N = pos.size(0)
         logits = torch.cat((pos, neg), dim=1)
         logits /= self.temperature
-      # labels = torch.zeros((N, ), dtype=torch.long).cuda() # rogne su cpu / gpu. da capire.
         labels = torch.zeros(N, dtype=torch.long, device=pos.device)
         losses = dict()
         losses['loss_contra'] = self.criterion(logits, labels)
         return losses
+    
+def contrastive_head(temperature=0.1):
+    return ContrastiveHead(temperature=temperature)
