@@ -1,34 +1,38 @@
 import torch
 import torch.nn as nn
 
-from contrastive_head import ContrastiveHead
-from resnet import resnet50
-from necks  import DenseCLNeck
+from contrastive_head import contrastive_head
 
 
 class DenseCL(nn.Module):
     def __init__(self,
-                 pretrained=None,
+                 backbone_q,
+                 neck_q,
+                 backbone_k,
+                 neck_k,
+                 pretrained,
                  queue_len=65536,
                  feat_dim=128,
                  momentum=0.999,
                  loss_lambda=0.5):
         super(DenseCL, self).__init__()
-        self.encoder_q = nn.Sequential( resnet50(), DenseCLNeck(in_channels=2048, hid_channels=2048, out_channels=feat_dim) )
-        self.encoder_k = nn.Sequential( resnet50(), DenseCLNeck(in_channels=2048, hid_channels=2048, out_channels=feat_dim) )
+        
+        # importantissimo: non creiamo istanze nuove, ma dei puntatori.
+        self.encoder_q = nn.ModuleList([backbone_q, neck_q])
+        self.encoder_k = nn.ModuleList([backbone_k, neck_k])
 
         self.backbone = self.encoder_q[0]
 
-        for param in self.encoder_k.parameters():
-            param.requires_grad = False
+        for m in self.encoder_k:
+            for p in m.parameters():
+                p.requires_grad = False
 
-        # istanziato qui direttamente contrastive head.
-        self.head = ContrastiveHead()
+        self.head = contrastive_head()
 
         self.init_weights(pretrained=pretrained)
 
-        self.queue_len = queue_len
-        self.momentum = momentum
+        self.queue_len   = queue_len
+        self.momentum    = momentum
         self.loss_lambda = loss_lambda
 
         # create the queue
@@ -40,23 +44,24 @@ class DenseCL(nn.Module):
         self.queue2 = nn.functional.normalize(self.queue2, dim=0)
         self.register_buffer("queue2_ptr", torch.zeros(1, dtype=torch.long))
 
-    def init_weights(self, pretrained=None):
+    def init_weights(self, pretrained):
         if pretrained is not None:
-            print('load model from: da capiree!!')
+            print('... loading pre-trained weights ...')
         self.encoder_q[0].init_weights(pretrained=pretrained)
         self.encoder_q[1].init_weights(init_linear='kaiming')
-        # copia i parametri di encoder_q in encoder_k (le inizializzazioni sono randomiche)
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
-            param_k.data.copy_(param_q.data)
+        # copia i parametri di encoder_q in encoder_k (all'inizio, per assicurarci che siano uguali)
+        self.encoder_k[0].load_state_dict(self.encoder_q[0].state_dict(), strict=True)
+        self.encoder_k[1].load_state_dict(self.encoder_q[1].state_dict(), strict=True)
 
-    @torch.no_grad()
+
+    @torch.no_grad() # to do!!
     def _momentum_update_key_encoder(self):
         """
         Momentum update of the key encoder
         """
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
-            param_k.data = param_k.data * self.momentum + \
-                           param_q.data * (1. - self.momentum)
+        for m_q, m_k in zip(self.encoder_q, self.encoder_k):
+            for param_q, param_k in zip(m_q.parameters(), m_k.parameters()):
+                param_k.data = param_k.data * self.momentum + param_q.data * (1. - self.momentum)
 
     @torch.no_grad()
     def _dequeue_and_enqueue(self, keys):
@@ -74,6 +79,7 @@ class DenseCL(nn.Module):
 
         self.queue_ptr[0] = ptr
 
+
     @torch.no_grad()
     def _dequeue_and_enqueue2(self, keys):
         # gather keys before updating queue
@@ -89,6 +95,7 @@ class DenseCL(nn.Module):
         ptr = (ptr + batch_size) % self.queue_len  # move pointer
 
         self.queue2_ptr[0] = ptr
+
 
     @torch.no_grad()
     def _batch_shuffle_ddp(self, x):
@@ -118,6 +125,7 @@ class DenseCL(nn.Module):
 
         return x_gather[idx_this], idx_unshuffle
 
+
     @torch.no_grad()
     def _batch_unshuffle_ddp(self, x, idx_unshuffle):
         """
@@ -136,6 +144,7 @@ class DenseCL(nn.Module):
         idx_this = idx_unshuffle.view(num_gpus, -1)[gpu_idx]
 
         return x_gather[idx_this]
+
 
     def forward_train(self, im_q, im_k, **kwargs):
         # compute query features
@@ -205,26 +214,11 @@ class DenseCL(nn.Module):
 
         return losses
 
-    def forward_test(self, img, **kwargs):
-        im_q = img.contiguous()
-        # compute query features
-        #_, q_grid, _ = self.encoder_q(im_q)
-        q_grid = self.backbone(im_q)[0]
-        q_grid = q_grid.view(q_grid.size(0), q_grid.size(1), -1)
-        q_grid = nn.functional.normalize(q_grid, dim=1)
-        return None, q_grid, None
 
     def forward(self, im_q, im_k, mode='train', **kwargs):
         # per il training, ci aspettiamo im_q e im_k
         if mode == 'train':
             return self.forward_train(im_q, im_k, **kwargs)
-        # per il test, ci aspettiamo un singolo 'img'
-        # elif mode == 'test':
-        #    return self.forward_test(img, **kwargs)
-        # elif mode == 'extract':
-        #    return self.backbone(img)
-        # else:
-        #    raise Exception("No such mode: {}".format(mode))
 
 
 # utils
