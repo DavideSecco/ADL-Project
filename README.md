@@ -10,6 +10,8 @@
 
 #### Modelli
 
+- [ ] Far partire DeCUR su KAIST [Marco]
+
 - [ ] Pretraining di Decur [Davide]
   - [ ] Sunrgbd su Karolina 
     - [X] Sistema cvtorchvision
@@ -18,14 +20,16 @@
   - [ ] KAIST su Karolina 
 
 - [ ] Pretraing di DenseCL [Daniele]
-  - [ ] Farlo partire in locale su Sunrdgd
+  - [X] Farlo partire in locale su Sunrdgd
   - [ ] Farlo partire in locale su Kaist
   - [ ] Farlo partire su Karolina su Kaist
   - [ ] KAIST
     - [ ] Modalitá 1
     - [ ] Modalitá 2
 - [ ] Integrazione DenseCL e DeCur [Daniele]
-  - [ ] ....
+  - [ ] Farlo partire in locale su Sunrgbd
+  - [ ] Farlo partire in locale su Kaist
+  - [ ] Farlo partire su Karolina su Kaist
 
 #### Evoluzione
 
