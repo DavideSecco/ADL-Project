@@ -24,6 +24,8 @@ import torchvision.datasets as datasets
 
 import loader
 from densecl import DenseCL
+from necks   import densecl_neck
+from resnet  import resnet50
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -154,13 +156,27 @@ def main_worker(gpu, ngpus_per_node, args):
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
 
-    # model creation
+    # model creation for DenseCL
+
     print("=> creating model '{}'".format(args.arch))
+    backbone_q = resnet50()
+    neck_q     = densecl_neck(in_channels=2048, hid_channels=2048, out_channels=128)
+    backbone_k = resnet50()
+    neck_k     = densecl_neck(in_channels=2048, hid_channels=2048, out_channels=128)
+
     model = DenseCL(
-        pretrained=None,
-        queue_len=args.moco_k,
-        feat_dim=args.moco_dim,
-        momentum=args.moco_m)
+        backbone_q=backbone_q,
+        neck_q=neck_q,
+        backbone_k=backbone_k,
+        neck_k=neck_k,
+        pretrained=True)
+    
+    # model creation for DeCUR
+    # arrivo qui:
+    model = DeCUR(
+
+    )
+    # qui:
 
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
