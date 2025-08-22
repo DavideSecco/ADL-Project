@@ -10,7 +10,7 @@
 
 #### Modelli
 
-- [ ] Far partire DeCUR su KAIST [Marco]
+- [X] Far partire DeCUR su KAIST [Marco]
 
 - [ ] Pretraining di Decur [Davide]
   - [ ] Sunrgbd su Karolina 
