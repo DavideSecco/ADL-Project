@@ -21,3 +21,7 @@ SUNRGBD-*.tgz
 checkpoint/*
 *.zip
 kaist-cvpr15/
+data/kaist-cvpr15/
+data/kaist/
+data/
+

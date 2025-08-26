@@ -35,7 +35,7 @@ import pdb
 
 parser = argparse.ArgumentParser(description='Multimodal self-supervised pretraining')
 parser.add_argument('--dataset', type=str,
-                    help='pretraining dataset', choices=['SSL4EO','GEONRW','SUNRGBD'])
+                    help='pretraining dataset', choices=['SSL4EO','GEONRW','SUNRGBD','KAIST'])  # aggiunto KAIST
 parser.add_argument('--method', type=str,
                     help='pretraining method', choices=['DeCUR','CLIP','SimCLR','BarlowTwins','VICReg'])                    
 parser.add_argument('--data1', type=str, metavar='DIR',
@@ -349,7 +349,46 @@ def main_worker(gpu, args):
             rgb_transform=TwoCropsTransform(train_transforms_rgb),
             depth_transform=TwoCropsTransform(train_transforms_dsm),
             mode=args.mode
-        )       
+        )  
+
+
+    elif args.dataset == 'KAIST':          # come i tre if sopra, idem per KAIST 
+        
+        from datasets.KAIST.kaist_dataset import KAISTDataset
+
+        train_transforms_rgb = cvtransforms.Compose([
+            cvtransforms.RandomResizedCrop(224, scale=(0.5, 1.)),
+            cvtransforms.RandomApply([
+                RandomBrightness(0.4),
+                RandomContrast(0.4)
+            ], p=0.8),       #agumentazioni come per SUNRGBD nell'immagine rgb, nel caso modificheremo i valori
+            cvtransforms.RandomApply([ToGray(3)], p=0.2),
+            cvtransforms.RandomApply([GaussianBlur([.1, 2.])], p=0.5),
+            cvtransforms.RandomHorizontalFlip(),
+            cvtransforms.ToTensor(),
+            # normalizzazione standard come fatta in SUNRGBD sui 3 canali
+            cvtransforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                   std=[0.229, 0.224, 0.225])
+            ])
+
+        # Thermal: trasformazione su 3 canali, le immagini vengono gia' convertite nel get_item della classe dataset da 1 channel a 3 
+        train_transforms_th = cvtransforms.Compose([
+            cvtransforms.RandomResizedCrop(224, scale=(0.5, 1.)),
+            cvtransforms.RandomHorizontalFlip(),
+            cvtransforms.ToTensor(),
+            # Normalizzazione
+            cvtransforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+            ])
+
+        train_dataset = KAISTDataset(
+            rgb_dir=args.data1,
+            th_dir=args.data2,
+            rgb_transform=TwoCropsTransform(train_transforms_rgb),
+            th_transform=TwoCropsTransform(train_transforms_th),
+            mode=args.mode
+        ) 
+
+
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
