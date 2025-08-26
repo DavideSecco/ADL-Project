@@ -3,7 +3,6 @@
 DeCUR/checkpoint/*
 logs/
 SUN_RGBD/
-kaist/
 
 # Files
 .python-version
@@ -21,3 +20,4 @@ SUNRGBD.zip
 SUNRGBD-*.tgz
 checkpoint/*
 *.zip
+kaist-cvpr15/
