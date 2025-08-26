@@ -21,6 +21,13 @@ import torch.distributed as dist
 import torch.nn.functional as F
 import diffdist
 
+# PICCOLO FIX: necessario solo sul karolina perché il venv creato in realtá é 3.11 
+# e iterable non é piú in collections, se riesci a rifare env con python 3.9.6 come da istruzioni
+# lo puoi togliere
+import collections
+import collections.abc
+collections.Iterable = collections.abc.Iterable
+
 
 from cvtorchvision import cvtransforms
 from utils.rs_transforms_uint8 import RandomChannelDrop,RandomBrightness,RandomContrast,ToGray,GaussianBlur,Solarize
@@ -39,11 +46,11 @@ parser.add_argument('--workers', default=8, type=int, metavar='N',
                     help='number of data loader workers')
 parser.add_argument('--epochs', default=1000, type=int, metavar='N',
                     help='number of total epochs to run')
-parser.add_argument('--batch-size', default=4, type=int, metavar='N', # 2048
+parser.add_argument('--batch-size', default=128, type=int, metavar='N', # 128 <= valore per karolina < 1024
                     help='mini-batch size')
-parser.add_argument('--learning-rate-weights', default=0.2, type=float, metavar='LR',
+parser.add_argument('--learning-rate-weights', default=0.002, type=float, metavar='LR',
                     help='base learning rate for weights')
-parser.add_argument('--learning-rate-biases', default=0.0048, type=float, metavar='LR',
+parser.add_argument('--learning-rate-biases', default=0.00048, type=float, metavar='LR',
                     help='base learning rate for biases and batch norm parameters')
 parser.add_argument('--weight-decay', default=1e-4, type=float, metavar='W',
                     help='weight decay')
@@ -202,11 +209,6 @@ def main_worker(gpu, args):
     else:
         model = model.cpu()
         model = torch.nn.parallel.DistributedDataParallel(model, find_unused_parameters=True)
-
-    # Aggiunto per controllare se è ancora presente SyncBatchNorm
-    for m in model.modules():
-        if isinstance(m, torch.nn.SyncBatchNorm):
-            print("Found SyncBatchNorm")
 
     if 'vit' or 'mit' in args.backbone or args.rda:
         optimizer = torch.optim.AdamW(parameters, args.lr, weight_decay=args.weight_decay)
