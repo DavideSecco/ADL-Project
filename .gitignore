@@ -3,6 +3,7 @@
 DeCUR/checkpoint/*
 logs/
 SUN_RGBD/
+kaist/
 
 # Files
 .python-version
