@@ -23,6 +23,7 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 
 import loader
+from densedecur   import DeCUR
 from densecl import DenseCL
 from necks   import densecl_neck
 from resnet  import resnet50
@@ -96,6 +97,15 @@ parser.add_argument('--aug-plus', action='store_true',
 parser.add_argument('--cos', action='store_true',
                     help='use cosine lr schedule')
 
+# adding DeCUR specific options
+parser.add_argument('--algo', default='decur', choices=['densecl','decur'],
+                    help='quale metodo eseguire')
+parser.add_argument('--dim-common', type=int, default=64,
+                    help='dimensione sottospazio comune di DeCUR (<= 128)')
+parser.add_argument('--lambd', type=float, default=5e-3,
+                    help='peso off-diagonal per la loss cross-correlazione di DeCUR')
+
+
 
 def main():
     args = parser.parse_args()
@@ -153,30 +163,22 @@ def main_worker(gpu, ngpus_per_node, args):
             # For multiprocessing distributed training, rank needs to be the
             # global rank among all the processes
             args.rank = args.rank * ngpus_per_node + gpu
-        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+        dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank)
 
     # model creation for DenseCL
-
-    print("=> creating model '{}'".format(args.arch))
-    backbone_q = resnet50()
-    neck_q     = densecl_neck(in_channels=2048, hid_channels=2048, out_channels=128)
-    backbone_k = resnet50()
-    neck_k     = densecl_neck(in_channels=2048, hid_channels=2048, out_channels=128)
-
-    model = DenseCL(
-        backbone_q=backbone_q,
-        neck_q=neck_q,
-        backbone_k=backbone_k,
-        neck_k=neck_k,
-        pretrained=True)
+    if args.algo == 'densecl':
+        print("=> creating DenseCL model")
+        backbone_q = resnet50()
+        neck_q     = densecl_neck(in_channels=2048, hid_channels=2048, out_channels=128)
+        backbone_k = resnet50()
+        neck_k     = densecl_neck(in_channels=2048, hid_channels=2048, out_channels=128)
+        model = DenseCL(backbone_q=backbone_q, neck_q=neck_q,
+                        backbone_k=backbone_k, neck_k=neck_k,
+                        pretrained=True)
+    else:
+        print("=> creating DeCUR model")
+        model = DeCUR(args)
     
-    # model creation for DeCUR
-    # arrivo qui:
-    model = DeCUR(
-
-    )
-    # qui:
 
     if args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
@@ -234,37 +236,32 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # Data loading code
     traindir = os.path.join(args.data, 'train')
-    normalize = transforms.Normalize(
-        mean=[0.485, 0.456, 0.406],
-        std=[0.229, 0.224, 0.225]
-    )
-    if args.aug_plus:
-        # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
-        augmentation = [
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            transforms.RandomApply([
-                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
-            ], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([loader.GaussianBlur([.1, 2.])], p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize
-        ]
-    else:
-        # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
-        augmentation = [
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize
-        ]
 
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        loader.TwoCropsTransform(transforms.Compose(augmentation)))
+    # Definiamo due pipeline di trasformazioni (una per "mod1", una per "mod2")
+    t1 = transforms.Compose([
+        transforms.RandomResizedCrop(224, scale=(0.2, 1.0)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485,0.456,0.406],
+                             std=[0.229,0.224,0.225]),
+    ])
+
+    t2 = transforms.Compose([
+        transforms.RandomResizedCrop(224, scale=(0.2, 1.0)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485,0.456,0.406],
+                             std=[0.229,0.224,0.225]),
+    ])
+
+    # Scegliamo il transform in base all'algoritmo
+    if args.algo == 'densecl':
+        base_transform = transforms.Compose(augmentation)  # era già nel tuo codice
+        transform_train = loader.TwoCropsTransform(base_transform)
+    else:
+        transform_train = loader.FourCropsTransform(t1, t2)
+
+    train_dataset = datasets.ImageFolder(traindir, transform_train)
 
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
@@ -272,8 +269,13 @@ def main_worker(gpu, ngpus_per_node, args):
         train_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
+        train_dataset, 
+        batch_size=args.batch_size, 
+        shuffle=(train_sampler is None),
+        num_workers=args.workers, 
+        pin_memory=True, 
+        sampler=train_sampler, 
+        drop_last=True)
 
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
@@ -319,17 +321,32 @@ def train(train_loader, model, optimizer, epoch, args):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        if torch.cuda.is_available() and args.gpu is not None:
-            images[0] = images[0].cuda(args.gpu, non_blocking=True)
-            images[1] = images[1].cuda(args.gpu, non_blocking=True)
-
         # compute output
-        use_amp = args.use_mixed_precision and torch.cuda.is_available()
+        use_amp = args.use_mixed_precision and torch.cuda.is_available()            
         with amp.autocast(enabled=use_amp):
-            losses = model(im_q=images[0], im_k=images[1])
-            loss_single = losses['loss_contra_single']
-            loss_dense  = losses['loss_contra_dense']
-            loss = loss_single + loss_dense
+            if args.algo == 'densecl':
+                if torch.cuda.is_available() and args.gpu is not None:
+                    im_q = y1_1.cuda(args.gpu, non_blocking=True)
+                    im_k = y1_2.cuda(args.gpu, non_blocking=True)
+                losses = model(im_q=im_q, im_k=im_k)
+                loss_single = losses['loss_contra_single']
+                loss_dense  = losses['loss_contra_dense']
+                loss = loss_single + loss_dense
+            else:
+                # images = [y1_1, y1_2, y2_1, y2_2] (collate di default: ciascuno è [B,C,H,W]) # y1_1, y1_2, y2_1, y2_2 = [im.cuda(non_blocking=True) for im in images]
+                y1_1 = images[0]
+                y1_2 = images[1]
+                y2_1 = images[2]
+                y2_2 = images[3]
+                # porta su GPU (se sopra lo fai prima, lascia com’era)
+                if torch.cuda.is_available() and args.gpu is not None: # y1_1, y1_2, y2_1, y2_2 = [im.cuda(non_blocking=True) for im in images]
+                    y1_1 = y1_1.cuda(args.gpu, non_blocking=True)
+                    y1_2 = y1_2.cuda(args.gpu, non_blocking=True)
+                    y2_1 = y2_1.cuda(args.gpu, non_blocking=True)
+                    y2_2 = y2_2.cuda(args.gpu, non_blocking=True)
+
+                loss1, loss2, loss12 = model(y1_1, y1_2, y2_1, y2_2)
+                loss = loss1 + loss2 + loss12
 
 
         # acc1/acc5 are (K+1)-way contrast classifier accuracy

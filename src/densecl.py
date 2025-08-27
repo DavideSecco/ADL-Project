@@ -199,8 +199,7 @@ class DenseCL(nn.Module):
 
         q_grid = q_grid.permute(0, 2, 1)
         q_grid = q_grid.reshape(-1, q_grid.size(2))
-        l_neg_dense = torch.einsum('nc,ck->nk', [q_grid,
-                                            self.queue2.clone().detach()])
+        l_neg_dense = torch.einsum('nc,ck->nk', [q_grid, self.queue2.clone().detach()])
 
         loss_single = self.head(l_pos, l_neg)['loss_contra']
         loss_dense =  self.head(l_pos_dense, l_neg_dense)['loss_contra']
@@ -209,10 +208,20 @@ class DenseCL(nn.Module):
         losses['loss_contra_single'] = loss_single * (1 - self.loss_lambda)
         losses['loss_contra_dense']  = loss_dense * self.loss_lambda
 
+        # DeCUR si aspetta loss intramodale finale
+        losses['loss_intra'] = losses['loss_contra_single'] + losses['loss_contra_dense']
+        
+        outputs = {
+             'loss_contra_single': losses['loss_contra_single'],
+             'loss_contra_dense':  losses['loss_contra_dense'],
+             'loss_intra':         losses['loss_intra'],
+             'zq_global':          q2 # ritorno q o q2??
+        }
+
         self._dequeue_and_enqueue(k)
         self._dequeue_and_enqueue2(k2)
 
-        return losses
+        return outputs
 
 
     def forward(self, im_q, im_k, mode='train', **kwargs):
