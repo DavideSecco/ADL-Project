@@ -22,59 +22,15 @@ class DeCUR(nn.Module):
     def __init__(self, args):
         super().__init__()
         self.args = args
+        
         # backbone
-        if args.backbone == 'resnet50':
-            self.backbone_1 = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
-            self.backbone_2 = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
-        elif args.backbone == 'resnet18':
-            self.backbone_1 = torchvision.models.resnet18(zero_init_residual=True,pretrained=True)
-            self.backbone_2 = torchvision.models.resnet18(zero_init_residual=True,pretrained=True)
-        elif args.backbone == 'vits16':
-            import timm
-            self.backbone_1 = timm.create_model('vit_small_patch16_224',pretrained=True)
-            self.backbone_2 = timm.create_model('vit_small_patch16_224',pretrained=True)
-        elif args.backbone == 'mit_b2':
-            from .segformer.encoders.segformer import mit_b2
-            self.backbone_1 = mit_b2(num_classes=2048)
-            self.backbone_2 = mit_b2(num_classes=2048)
-            self.backbone_1.init_weights(pretrained=args.pretrained)
-            self.backbone_2.init_weights(pretrained=args.pretrained)
-        elif args.backbone == 'mit_b5':
-            from .segformer.encoders.segformer import mit_b5
-            self.backbone_1 = mit_b5(num_classes=2048)
-            self.backbone_2 = mit_b5(num_classes=2048)
-            self.backbone_1.init_weights(pretrained=args.pretrained)
-            self.backbone_2.init_weights(pretrained=args.pretrained)
-
-        # Backbone adaptation (input channels & head removal)
-        if 'resnet' in args.backbone:
-            # s1 → Sentinel-1 (SAR = radar):
-            # s2c → Sentinel-2 (optical):
-            if args.mode==['s1','s2c']:
-                # Replace first conv layer to accept 2 and 13 input channels
-                self.backbone_1.conv1 = torch.nn.Conv2d(2, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)            
-                self.backbone_2.conv1 = torch.nn.Conv2d(13, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)        
-            # Remove classification head (we only need features, not predictions)
-            # nn.Identity() è un modulo PyTorch che non modifica l’input --> utile per disattivare blocchi della rete mantenendo la compatibilità strutturale.
-            self.backbone_1.fc = nn.Identity()
-            self.backbone_2.fc = nn.Identity()
-        elif 'vit' in args.backbone:
-            if args.mode==['s1','s2c']:
-                self.backbone_1.patch_embed.proj = nn.Conv2d(2, 384, kernel_size=(16, 16), stride=(16, 16))
-                self.backbone_2.patch_embed.proj = nn.Conv2d(13, 384, kernel_size=(16, 16), stride=(16, 16))
-            self.backbone_1.head = nn.Identity()
-            self.backbone_2.head = nn.Identity()
-            
+        self.backbone_1 = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
+        self.backbone_2 = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
+        self.backbone_1.fc = nn.Identity()
+        self.backbone_2.fc = nn.Identity()            
 
         # projector: Build projector MLPs for each backbone output
-        if args.backbone == 'resnet50':
-            sizes = [2048] + list(map(int, args.projector.split('-'))) # e.g. sizes = [2048, 8192, 8192, 8192]
-        elif args.backbone == 'resnet18':
-            sizes = [512] + list(map(int, args.projector.split('-')))
-        elif args.backbone == 'vits16':
-            sizes = [384] + list(map(int, args.projector.split('-')))
-        elif 'mit' in args.backbone:
-            sizes = [2048] + list(map(int, args.projector.split('-')))
+        sizes = [2048] + list(map(int, args.projector.split('-'))) # e.g. sizes = [2048, 8192, 8192, 8192]
 
         # Build MLP with linear layers + BatchNorm + ReLU (except last layer)
         layers = []
@@ -113,7 +69,8 @@ class DeCUR(nn.Module):
         # Compute normalized cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)
 
-        # sum the cross-correlation matrix between all gpus
+        # sum the cross-correlation matrix between all gpus (assumes 4 GPUs - io ho messo 1!!!)
+        # MODIFICARE IN BASE AL NUMERO GPU!!
         c.div_(self.args.batch_size*1)
         torch.distributed.all_reduce(c)
 
@@ -155,8 +112,8 @@ class DeCUR(nn.Module):
         # Compute normalized cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)
 
-        # Normalize by total number of samples (assumes 4 GPUs)
-        # attenzione qui!
+        # Normalize by total number of samples (assumes 4 GPUs - io ho messo 1!!!)
+        # MODIFICARE IN BASE AL NUMERO GPU!!!
         c.div_(self.args.batch_size*1)
         torch.distributed.all_reduce(c)
 
