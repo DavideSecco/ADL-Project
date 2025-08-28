@@ -45,7 +45,10 @@ parser = argparse.ArgumentParser(description='Multimodal self-Supervised Pretrai
 parser.add_argument('--dataset', type=str,
                     help='pretraining dataset', choices=['KAIST'])  
 parser.add_argument('--method', type=str,
-                    help='pretraining method', choices=['DeCUR','DenseCL','DenseDeCUR'])                    
+                    help='pretraining method', choices=['DeCUR','DenseCL','DenseDeCUR'])  
+parser.add_argument('--densecl_stream', type=str, default='rgb',
+                    choices=['rgb','thermal'],
+                    help='per DenseCL: scegli la stream da usare (rgb o thermal)')                  
 parser.add_argument('--data1', type=str, metavar='DIR',
                     help='path to dataset')
 parser.add_argument('--data2', type=str, metavar='DIR',
@@ -74,11 +77,11 @@ parser.add_argument('--lr', default=0.2, type=float) # no effect
 parser.add_argument('--cos', action='store_true', default=False)
 parser.add_argument('--schedule', default=[120,160], nargs='*', type=int)
 
-parser.add_argument('--mode', nargs='*', default=['s1','s2c'], help='bands to process')
+parser.add_argument('--mode', nargs='*', default=['rgb','thermal'], help='bands to process')
 parser.add_argument('--train_frac', type=float, default=1.0)
-parser.add_argument('--backbone', type=str, default='resnet50')
+#parser.add_argument('--backbone', type=str, default='resnet50')
 parser.add_argument('--resume', type=str, default='',help='resume path.')
-parser.add_argument('--dim_common', type=int, default=448)
+parser.add_argument('--dim_common', type=int, default=100) # common dimensions ATTENZIONEEEEEEEEEEEEEEEEE
 
 parser.add_argument('--pretrained', type=str, default='',help='pretrained path.')
 
@@ -209,9 +212,12 @@ def main_worker(gpu, args):
                             momentum=0.9,
                             weight_decay=1e-4)
     elif args.method == 'DenseDeCUR':
-        optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                            momentum=0.9,
-                            weight_decay=1e-4)
+        optimizer = LARS(parameters, lr=0, weight_decay=args.weight_decay,
+                weight_decay_filter=True,
+                lars_adaptation_filter=True)
+        # optimizer = torch.optim.SGD(model.parameters(), args.lr,
+        #                    momentum=0.9,
+        #                    weight_decay=1e-4)
 
     # automatically resume from checkpoint if it exists
     if args.resume:
@@ -243,8 +249,8 @@ def main_worker(gpu, args):
         num_workers=args.workers, pin_memory=args.is_slurm_job, sampler=train_sampler, drop_last=True)
 
     print(f"[DEBUG] train_loader has {len(train_loader)} batches")
-
-    print('Start training...')
+    print(f'[INFO] Start training...')
+    print(f"[INFO] Training method: {args.method}" + (f", DenseCL stream: {args.densecl_stream}" if args.method == 'DenseCL' else ""))
 
     start_time = time.time()
     scaler = torch.cuda.amp.GradScaler()
@@ -271,8 +277,13 @@ def main_worker(gpu, args):
                     loss1,loss2,loss12,on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
                     loss = (loss1 + loss2 + loss12) / 3
                 elif args.method=='DenseCL':
-                    loss_contra_single, loss_contra_dense = model.forward(y2_1, y2_2) # stessa modalità (o 1 o 2)
-                    loss = loss_contra_single + loss_contra_dense
+                    if args.densecl_stream == 'rgb':
+                        im_q, im_k = y1_1, y1_2  # RGB
+                    elif args.densecl_stream == 'thermal':
+                        im_q, im_k = y2_1, y2_2  # Thermal
+                    loss1, loss2, _ = model.forward(im_q, im_k) 
+                    loss = loss1 + loss2
+
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
@@ -286,12 +297,12 @@ def main_worker(gpu, args):
                                  #lr_weights=optimizer.param_groups[0]['lr'],
                                  #lr_biases=optimizer.param_groups[1]['lr'],
                                  #lr=optimizer.param_groups['lr'],
-                                 #loss=loss.item(),
+                                 loss=loss.item(),
                                  #loss_contra_single=loss_contra_single.item(),
                                  #loss_contra_dense=loss_contra_dense.item(),
                                  loss1=loss1.item(),
                                  loss2=loss2.item(),
-                                 loss12=loss12.item(),
+                                 #loss12=loss12.item(),
                                  #on_diag12_c=on_diag12_c.item(),
                                  time=int(time.time() - start_time))
                     print(json.dumps(stats))
@@ -315,7 +326,8 @@ def adjust_learning_rate(args, optimizer, epoch):
         for milestone in args.schedule:
             w *= 0.1 if epoch >= milestone else 1.
     optimizer.param_groups[0]['lr'] = w * args.learning_rate_weights
-    # optimizer.param_groups[1]['lr'] = w * args.learning_rate_biases (togliere in base optimzer)
+    if optimizer.__class__.__name__ == 'LARS':
+        optimizer.param_groups[1]['lr'] = w * args.learning_rate_biases 
      
 
 def handle_sigusr1(signum, frame):

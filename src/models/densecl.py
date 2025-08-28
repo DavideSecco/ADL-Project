@@ -45,7 +45,7 @@ class DenseCL(nn.Module):
             print('[INFO]: loading model from pretrained weights')
         self.encoder_q[0].init_weights(pretrained=pretrained)
         self.encoder_q[1].init_weights(init_linear='kaiming')
-        # copia i parametri di encoder_q in encoder_k (le inizializzazioni sono randomiche)
+        # copia i parametri di encoder_q in encoder_k
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)
 
