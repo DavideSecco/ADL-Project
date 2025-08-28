@@ -78,28 +78,7 @@ cd /mnt/proj3/eu-25-19/davide_secco/ADL-Project/SUN_RGBD/depth/train && for f in
 RANK=0 WORLD_SIZE=1 MASTER_ADDR=127.0.0.1 MASTER_PORT=29500 python DeCUR/src/pretrain/pretrain_mm.py --dataset SUNRGBD --method DeCUR --data1 SUN_RGBD/image/train/ --data2 SUN_RGBD/depth/train/ --mode MODAL1 MODAL2
 ```
 
-# Far partire il TransferLearning:
 
-## SUNRGBD (to complete)
-Fai riferimento al README.md al momento, quando verrà il momento, scrivi qui la procedura
-```bash 
-
-```
-
-# Altro - Altri dataset 
-
-E' necessario il dataset ma le opzioni sono:
-```
-https://github.com/zhu-xlab/DINO-MM/tree/main/datasets/BigEarthNet
-https://bigearth.net/#downloads --> 59gb (al momento infattibile)
-```
-
-Oppure 
-```
-https://github.com/zhu-xlab/SSL4EO-S12/tree/main/src/benchmark/transfer_classification/datasets/BigEarthNet
-https://github.com/zhu-xlab/SSL4EO-S12/tree/main
-https://drive.google.com/file/d/1sRWcYbaWs-efXza6kw03GlJQdZHq5iRN/view --> 670mb porzione del dataset scaricabile da qui (non sono riuscito)
-```
 
 
 
