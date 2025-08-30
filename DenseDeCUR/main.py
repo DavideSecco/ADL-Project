@@ -6,21 +6,24 @@ import argparse
 import json
 import math
 import os
-#import random
-#import signal
-#import subprocess
+import random
+import signal
+import subprocess
 import sys
 import time
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-#import torchvision
+import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import torch.distributed 
-#import torch.nn.functional as F
+import torch.nn.functional as F
+import diffdist
 
-# import diffdist
+# PICCOLO FIX: necessario solo sul karolina perché il venv creato in realtá é 3.11 
+# e iterable non é piú in collections, se riesci a rifare env con python 3.9.6 come da istruzioni
+# lo puoi togliere
 import collections
 import collections.abc
 collections.Iterable = collections.abc.Iterable
@@ -81,7 +84,7 @@ parser.add_argument('--mode', nargs='*', default=['rgb','thermal'], help='bands 
 parser.add_argument('--train_frac', type=float, default=1.0)
 #parser.add_argument('--backbone', type=str, default='resnet50')
 parser.add_argument('--resume', type=str, default='',help='resume path.')
-parser.add_argument('--dim_common', type=int, default=100) # common dimensions ATTENZIONEEEEEEEEEEEEEEEEE
+parser.add_argument('--dim_common', type=int, default=100) # common dimensions ATTENZIONEEEEEEEEEEEEEEEEE dipende se usi DeCUR o DenseDeCUR
 
 parser.add_argument('--pretrained', type=str, default='',help='pretrained path.')
 
