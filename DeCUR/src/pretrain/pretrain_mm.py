@@ -38,9 +38,9 @@ parser.add_argument('--dataset', type=str,
                     help='pretraining dataset', choices=['SSL4EO','GEONRW','SUNRGBD','KAIST'])  # aggiunto KAIST
 parser.add_argument('--method', type=str,
                     help='pretraining method', choices=['DeCUR','CLIP','SimCLR','BarlowTwins','VICReg'])                    
-parser.add_argument('--data1', type=str, metavar='DIR',
+parser.add_argument('--data1', type=str, metavar='DIR',        # per KAIST non utilizzeremo piu, passeremo le liste txt come sorta di views al dataset
                     help='path to dataset')
-parser.add_argument('--data2', type=str, metavar='DIR',
+parser.add_argument('--data2', type=str, metavar='DIR',       # per KAIST non utilizzeremo piu, passeremo le liste txt come sorta di views al dataset
                     help='path to dataset')
 parser.add_argument('--workers', default=8, type=int, metavar='N',
                     help='number of data loader workers')
@@ -62,7 +62,7 @@ parser.add_argument('--print-freq', default=100, type=int, metavar='N',
                     help='print frequency')
 parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path,
                     metavar='DIR', help='path to checkpoint directory')
-parser.add_argument('--lr', default=0.2, type=float) # no effect
+parser.add_argument('--lr', default=0.2, type=float)
 parser.add_argument('--cos', action='store_true', default=False)
 parser.add_argument('--schedule', default=[120,160], nargs='*', type=int)
 
@@ -73,6 +73,26 @@ parser.add_argument('--resume', type=str, default='',help='resume path.')
 parser.add_argument('--dim_common', type=int, default=448)
 
 parser.add_argument('--pretrained', type=str, default='',help='pretrained path.')
+
+# aggiunti arguments nuovi per gestire
+# > le liste txt con split dati
+# > root dataset
+# > estensioni delle immagini
+parser.add_argument('--data-root', type=str, default='~/ADL-Project/kaist-cvpr15/images',
+                    help='root del dataset KAIST (cartella che contiene setxx/Vyyy/{visible,lwir})')  
+
+parser.add_argument('--list-train', type=str, required=False,
+                    help='file txt con la lista per il training (relative paths)')
+parser.add_argument('--list-test', type=str, required=False,
+                    help='file txt con la lista per il test/val (relative paths)')
+
+parser.add_argument('--ext-vis', type=str, default='.jpg',
+                    help='estensione immagini visibili (default .jpg)')
+parser.add_argument('--ext-lwir', type=str, default='.jpg',
+                    help='estensione immagini lwir (default .jpg)')
+
+
+
 
 #########################
 #### dist parameters ###
@@ -354,7 +374,7 @@ def main_worker(gpu, args):
 
     elif args.dataset == 'KAIST':          # come i tre if sopra, idem per KAIST 
         
-        from datasets.KAIST.kaist_dataset import KAISTDataset
+        from datasets.KAIST.kaist_dataset_list import KAISTDatasetFromList
 
         train_transforms_rgb = cvtransforms.Compose([
             cvtransforms.RandomResizedCrop(224, scale=(0.5, 1.)),
@@ -380,13 +400,15 @@ def main_worker(gpu, args):
             cvtransforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
             ])
 
-        train_dataset = KAISTDataset(
-            rgb_dir=args.data1,
-            th_dir=args.data2,
+        train_dataset = KAISTDatasetFromList(     #nuova chiamata al nuovo dataset class con lista
+            data_root=args.data_root,
+            list_file=args.list_train,
             rgb_transform=TwoCropsTransform(train_transforms_rgb),
             th_transform=TwoCropsTransform(train_transforms_th),
+            ext_vis=args.ext_vis,
+            ext_lwir=args.ext_lwir,
             mode=args.mode
-        ) 
+        )
 
 
 

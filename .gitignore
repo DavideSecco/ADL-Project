@@ -25,3 +25,12 @@ data/kaist-cvpr15/
 data/kaist/
 data/
 
+# DenseDeCUR
+DenseDeCUR/checkpoint/
+DenseDeCUR/data/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# macOS
+.DS_Store
