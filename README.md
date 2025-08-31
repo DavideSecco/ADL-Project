@@ -3,21 +3,24 @@
 #### Dataset 
 - [ ] Dataset KAIST:
   - [X] Scaricare su Karolina [Davide]
-  - [ ] Spltittare su Karolina 
+  - [ ] Spltittare su Karolina [Marco/Davide]
 - [ ] Dataset Sunrgbd
   - [X] Scaricare su Karolina
-  - [ ] Splittare su Karolina 
+  - [ ] Splittare su Karolina [Marco/Davide]
 
 #### Modelli
 
-- [X] Far partire DeCUR su KAIST [Marco]
-
 - [ ] Pretraining di Decur [Davide]
-  - [ ] Sunrgbd su Karolina 
+  - [X] Sunrgbd su Karolina [Davide]
     - [X] Sistema cvtorchvision
     - [X] Fatto partire non splittato
-    - [ ] Controllare che il training sia andato a buon fine
-  - [ ] KAIST su Karolina 
+    - [X] Training (dataset non splittato) andato a buon fine
+    - [?] Training (dataset splittato) andato a buon fine
+  - [X] KAIST in locale [Marco]
+  - [X] KAIST su Karolina [Davide] 
+    - [X] Fatto partire non splittato
+    - [X] Training (dataset non splittato) andato a buon fine [Davide]
+    - [] Training (dataset splittato) andato a buon fine
 
 - [ ] Pretraing di DenseCL [Daniele]
   - [X] Farlo partire in locale su Sunrdgd
