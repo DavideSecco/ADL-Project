@@ -15,12 +15,19 @@
     - [X] Sistema cvtorchvision
     - [X] Fatto partire non splittato
     - [X] Training (dataset non splittato) andato a buon fine
-    - [?] Training (dataset splittato) andato a buon fine
+      - [X] Ottieni i checkpoint sul non splittato [Davide]
+    - [?] Training (dataset splittato) andato a buon fine (Non necessario)
+    
   - [X] KAIST in locale [Marco]
+    - [ ] Sistema classe KaistDataset, creane una sola?
   - [X] KAIST su Karolina [Davide] 
     - [X] Fatto partire non splittato
-    - [X] Training (dataset non splittato) andato a buon fine [Davide]
-    - [] Training (dataset splittato) andato a buon fine
+    - [X] Training (dataset standard) andato a buon fine [Davide]
+      - [X] Ottieni il checkpoint sul non splittato [Davide]
+    - [X] Training (dataset .txt) andato a buon fine 
+      - [X] Ottenuti i checkpoint
+    - [] Training (dataset .txt, ma solo 25%) andato a buon fine [Davide] - da aspettare che marco prepari i files .txt (?)
+      - [] Ottenuti i checkpoint Definitivi!
 
 - [ ] Pretraing di DenseCL [Daniele]
   - [X] Farlo partire in locale su Sunrdgd
@@ -36,5 +43,6 @@
 
 #### Evoluzione
 
-- [ ] Iniziare a implementare modello multimodale (Carlo deve consigliare) [Marco]
-  - [ ] 
+- [ ] Implementare modello multimodale (Carlo deve consigliare) [Marco]
+  - [ ] setup della repo in locale [Marco]
+  - [ ] Setup della repo su karolina [Davide] 
