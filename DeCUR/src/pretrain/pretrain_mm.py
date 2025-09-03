@@ -375,6 +375,7 @@ def main_worker(gpu, args):
     elif args.dataset == 'KAIST':          # come i tre if sopra, idem per KAIST 
         
         from datasets.KAIST.kaist_dataset_list import KAISTDatasetFromList
+        from datasets.KAIST.kaist_dataset_OLD import KAISTDataset
 
         train_transforms_rgb = cvtransforms.Compose([
             cvtransforms.RandomResizedCrop(224, scale=(0.5, 1.)),
@@ -400,15 +401,25 @@ def main_worker(gpu, args):
             cvtransforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
             ])
 
-        train_dataset = KAISTDatasetFromList(     #nuova chiamata al nuovo dataset class con lista
-            data_root=args.data_root,
-            list_file=args.list_train,
+        # Chiamo il metodo con le liste se carico il file tramite files
+        if args.data_root is not None and args.list_train is not None:
+            train_dataset = KAISTDatasetFromList(     #nuova chiamata al nuovo dataset class con lista
+                data_root=args.data_root,
+                list_file=args.list_train,
+                rgb_transform=TwoCropsTransform(train_transforms_rgb),
+                th_transform=TwoCropsTransform(train_transforms_th),
+                ext_vis=args.ext_vis,
+                ext_lwir=args.ext_lwir,
+                mode=args.mode
+            )
+        else:
+            train_dataset = KAISTDataset(
+            rgb_dir=args.data1,
+            th_dir=args.data2,
             rgb_transform=TwoCropsTransform(train_transforms_rgb),
             th_transform=TwoCropsTransform(train_transforms_th),
-            ext_vis=args.ext_vis,
-            ext_lwir=args.ext_lwir,
             mode=args.mode
-        )
+        ) 
 
 
 
@@ -473,10 +484,11 @@ def main_worker(gpu, args):
                                  #loss12=loss12.item(),
                                  #on_diag12_c=on_diag12_c.item(),
                                  time=int(time.time() - start_time))
-                    print(json.dumps(stats))
-                    print(json.dumps(stats), file=stats_file)
+                    print(json.dumps(stats), flush=True)
+                    print(json.dumps(stats), file=stats_file, flush=True)
     
-        if args.rank == 0 and epoch%100==0:
+        # Salvo ogni 100 epoche oppure all'ultima
+        if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
             # save checkpoint
             state = dict(epoch=epoch + 1, model=model.state_dict(),
                          optimizer=optimizer.state_dict())
