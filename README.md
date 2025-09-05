@@ -1,5 +1,10 @@
 # Todo
 
+Quota su karolina: it4ifsusage
+du -h --max-depth=1
+du -sh * | sort -h 
+
+
 #### Dataset 
 - [ ] Dataset KAIST:
   - [X] Scaricare su Karolina [Davide]
@@ -28,6 +33,7 @@
       - [X] Ottenuti i checkpoint
     - [] Training (dataset .txt, ma solo 25%) andato a buon fine [Davide] - da aspettare che marco prepari i files .txt (?)
       - [] Ottenuti i checkpoint Definitivi!
+    - [ ] Possibile sia necessario un cambio di formato checkpoint --> from pth to pt (compatibilità con objdet)
 
 - [ ] Pretraing di DenseCL [Daniele]
   - [X] Farlo partire in locale su Sunrdgd
@@ -45,4 +51,15 @@
 
 - [ ] Implementare modello multimodale (Carlo deve consigliare) [Marco]
   - [ ] setup della repo in locale [Marco]
-  - [ ] Setup della repo su karolina [Davide] 
+  - [X] Setup della repo su karolina [Davide]
+
+  - [ ] Portare a termine trainig parziale (set parziale di label - no pesi nostri)
+    - [X] Start training con i pesi forniti   
+    - [X] Traduzione parziale labels from xml to txt format
+    - [ ] Training completo senza errori 
+
+  - Portare a termine trainig completo (set completo di label - pesi nostri)
+    - [ ] FORSE: modificare come salva i pesi decur
+    - [ ] Adattamento nomi layer della rete per compatibilità coi nostri pesi pretrainati (Carlo(?)) [Davide]
+    - [ ] Traduzione di tutte le label kaist from  
+    - [ ] Start training con i pesi da DeCUR
