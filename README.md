@@ -35,17 +35,27 @@ du -sh * | sort -h
       - [] Ottenuti i checkpoint Definitivi!
     - [ ] Possibile sia necessario un cambio di formato checkpoint --> from pth to pt (compatibilità con objdet)
 
-- [ ] Pretraing di DenseCL [Daniele]
+- [X] Pretraing di DenseCL [Daniele]
   - [X] Farlo partire in locale su Sunrdgd
-  - [ ] Farlo partire in locale su Kaist
-  - [ ] Farlo partire su Karolina su Kaist
-  - [ ] KAIST
-    - [ ] Modalitá 1
-    - [ ] Modalitá 2
-- [ ] Integrazione DenseCL e DeCur [Daniele]
-  - [ ] Farlo partire in locale su Sunrgbd
-  - [ ] Farlo partire in locale su Kaist
-  - [ ] Farlo partire su Karolina su Kaist
+  - [X] Farlo partire in locale su Kaist
+  - [X] Farlo partire su Karolina su Kaist
+  - [X] KAIST
+    - [X] Modalitá 1
+    - [X] Modalitá 2
+- [X] Integrazione DenseCL e DeCur [Daniele]
+  - [X] Farlo partire in locale su Sunrgbd
+  - [X] Farlo partire in locale su Kaist
+  - [X] Farlo partire su Karolina su Kaist
+     
+- [ ] Aspetti da considerare prima del pre-training
+  - [ ] definire augmentations usate per KAIST
+    - [ ] confrontare con quelle di DenseCL: ci sono differenze?possono essere integrate?
+  - [ ] trovare dimensione comune embedding DeCUR
+  
+- [ ] far partire pre-training
+  - [ ] DenseCL
+  - [ ] DeCUR
+  - [ ] DenseDeCUR
 
 #### Evoluzione
 
