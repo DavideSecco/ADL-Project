@@ -47,14 +47,14 @@ export CUDA_LAUNCH_BLOCKING=1
 python -u src/pretrain/pretrain_mm.py \
   --dataset KAIST \
   --method DeCUR \
-  --data-root /mnt/proj3/eu-25-19/davide_secco/ADL-Project/kaist-cvpr15/images \
-  --list-train /mnt/proj3/eu-25-19/davide_secco/ADL-Project/Kaist_txt_lists/train-all-01.txt \
+  --data-root /scratch/project/eu-25-19/kaist-cvpr15/images \
+  --list-train /mnt/proj3/eu-25-19/davide_secco/ADL-Project/Kaist_txt_lists/Training_forSSL_pretraining_25.txt \
   --mode rgb thermal \
   --backbone resnet50 \
   --batch-size 128 \
   --workers 8 \
   --epochs 15 \
-  --checkpoint-dir ./checkpoint/KAIST_from_lists \
+  --checkpoint-dir ./checkpoint/KAIST_Training_forSSL_pretraining_25 \
   --cos \
   --learning-rate-weights 0.002 \
   --learning-rate-biases 0.00048 \

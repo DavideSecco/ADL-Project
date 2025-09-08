@@ -16,8 +16,8 @@ echo "[INFO] Starting dataset extraction..."
 # module load unzip
 
 # Definisci variabili
-ARCHIVE=/mnt/proj3/eu-25-19/davide_secco/ADL-Project/kaist-thermal-images.zip
-DEST=/mnt/proj3/eu-25-19/davide_secco/ADL-Project/kaist/
+ARCHIVE=/scratch/project/eu-25-19/kaist-thermal-images.zip
+DEST=/scratch/project/eu-25-19/
 
 # Crea cartella destinazione se non esiste
 mkdir -p $DEST

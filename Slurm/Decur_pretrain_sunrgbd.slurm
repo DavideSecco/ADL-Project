@@ -47,8 +47,8 @@ export CUDA_LAUNCH_BLOCKING=1
 python src/pretrain/pretrain_mm.py \
     --dataset SUNRGBD \
     --method DeCUR \
-    --data1 /mnt/proj3/eu-25-19/davide_secco/ADL-Project/SUN_RGBD/image/train/ \
-    --data2 /mnt/proj3/eu-25-19/davide_secco/ADL-Project/SUN_RGBD/depth/train/ \
+    --data1 /scratch/project/eu-25-19/SUN_RGBD/image/train/ \
+    --data2 /scratch/project/eu-25-19/SUN_RGBD/depth/train/ \
     --checkpoint-dir ./checkpoint/sunrgbd \
     --batch-size 128 \
     --mode MODAL1 MODAL2 \

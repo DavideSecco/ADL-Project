@@ -47,8 +47,8 @@ export CUDA_LAUNCH_BLOCKING=1
 python src/pretrain/pretrain_mm.py \
     --dataset KAIST \
     --method DeCUR \
-    --data1 /mnt/proj3/eu-25-19/davide_secco/ADL-Project/kaist-cvpr15/images \
-    --data2 /mnt/proj3/eu-25-19/davide_secco/ADL-Project/kaist-cvpr15/images \
+    --data1 /scratch/project/eu-25-19/kaist-cvpr15/images \
+    --data2 /scratch/project/eu-25-19/kaist-cvpr15/images \
     --mode rgb thermal \
     --checkpoint-dir ./checkpoint/KAIST_original \
     --epochs 15 \
