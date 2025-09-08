@@ -57,7 +57,7 @@ else
 fi
 
 # Pacchetti aggiuntivi:
-pip install requests, einops, timm
+pip install requests, einops, timm, wandb
 
 # ===== Report finale =====
 echo "[INFO] conda list python:"
