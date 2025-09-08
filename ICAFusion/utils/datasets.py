@@ -466,7 +466,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 x[:, 0] = 0
 
         n = len(shapes)  # number of images
-        bi = np.floor(np.arange(n) / batch_size).astype(np.int)  # batch index
+        bi = np.floor(np.arange(n) / batch_size).astype(int)  # batch index
         nb = bi[-1] + 1  # number of batches
         self.batch = bi  # batch index of image
         self.n = n
@@ -494,7 +494,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
                 elif mini > 1:
                     shapes[i] = [1, 1 / mini]
 
-            self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int) * stride
+            self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(int) * stride
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         self.imgs = [None] * n
@@ -689,7 +689,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
 
 class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
     """
-    FQY  载入多模态数据 （RGB 和 IR）
+    FQY  载入多模态数据 （RGB 和 IR）= caricamento di dati multimodali (RGB e infrarosso)
     """
     def __init__(self, path_rgb, path_ir, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
                  cache_images=False, single_cls=False, stride=32, pad=0.0, prefix=''):
@@ -748,10 +748,11 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
         # Check cache
         # Check rgb cache
         self.label_files_rgb = img2label_paths(self.img_files_rgb)  # labels
+        # print(f"self.label_files_rgb: {self.label_files_rgb}")
         # print(self.label_files)
         cache_rgb_path = (p_rgb if p_rgb.is_file() else Path(self.label_files_rgb[0]).parent).with_suffix('.cache')  # cached labels
         if cache_rgb_path.is_file():
-            cache_rgb, exists_rgb = torch.load(cache_rgb_path), True  # load
+            cache_rgb, exists_rgb = torch.load(cache_rgb_path, weights_only=False), True  # load
             if cache_rgb['hash'] != get_hash(self.label_files_rgb + self.img_files_rgb) or 'version' not in cache_rgb:  # changed
                 cache_rgb, exists_rgb = self.cache_labels(self.img_files_rgb,self.label_files_rgb,
                                                           cache_rgb_path, prefix), False  # re-cache
@@ -764,7 +765,7 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
         # print(self.label_files)
         cache_ir_path = (p_ir if p_ir.is_file() else Path(self.label_files_ir[0]).parent).with_suffix('.cache')  # cached labels
         if cache_ir_path.is_file():
-            cache_ir, exists_ir = torch.load(cache_ir_path), True  # load
+            cache_ir, exists_ir = torch.load(cache_ir_path, weights_only=False), True  # load
             if cache_ir['hash'] != get_hash(self.label_files_ir + self.img_files_ir) or 'version' not in cache_ir:  # changed
                 cache_ir, exists_ir = self.cache_labels(self.img_files_ir, self.label_files_ir,
                                                         cache_ir_path, prefix), False  # re-cache
@@ -798,7 +799,7 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
                 x[:, 0] = 0
 
         n_rgb = len(shapes_rgb)  # number of images
-        bi_rgb = np.floor(np.arange(n_rgb) / batch_size).astype(np.int)  # batch index
+        bi_rgb = np.floor(np.arange(n_rgb) / batch_size).astype(int)  # batch index
         nb_rgb = bi_rgb[-1] + 1  # number of batches
         self.batch_rgb = bi_rgb  # batch index of image
         self.n_rgb = n_rgb
@@ -817,7 +818,7 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
                 x[:, 0] = 0
 
         n_ir = len(shapes_ir)  # number of images
-        bi_ir = np.floor(np.arange(n_ir) / batch_size).astype(np.int)  # batch index
+        bi_ir = np.floor(np.arange(n_ir) / batch_size).astype(int)  # batch index
         nb_ir = bi_ir[-1] + 1  # number of batches
         self.batch_ir = bi_ir  # batch index of image
         self.n_ir = n_ir
@@ -846,7 +847,7 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
                 elif mini > 1:
                     shapes_rgb[i] = [1, 1 / mini]
 
-            self.batch_shapes_rgb = np.ceil(np.array(shapes_rgb) * img_size / stride + pad).astype(np.int) * stride
+            self.batch_shapes_rgb = np.ceil(np.array(shapes_rgb) * img_size / stride + pad).astype(int) * stride
 
             # IR
             # Sort by aspect ratio
@@ -869,7 +870,7 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
                 elif mini > 1:
                     shapes_ir[i] = [1, 1 / mini]
 
-            self.batch_shapes_ir = np.ceil(np.array(shapes_ir) * img_size / stride + pad).astype(np.int) * stride
+            self.batch_shapes_ir = np.ceil(np.array(shapes_ir) * img_size / stride + pad).astype(int) * stride
 
         # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
         self.imgs_rgb = [None] * n_rgb
@@ -1727,7 +1728,7 @@ def extract_boxes(path='../coco128/'):  # from utils.datasets import *; extract_
                     b = x[1:] * [w, h, w, h]  # box
                     # b[2:] = b[2:].max()  # rectangle to square
                     b[2:] = b[2:] * 1.2 + 3  # pad
-                    b = xywh2xyxy(b.reshape(-1, 4)).ravel().astype(np.int)
+                    b = xywh2xyxy(b.reshape(-1, 4)).ravel().astype(int)
 
                     b[[0, 2]] = np.clip(b[[0, 2]], 0, w)  # clip boxes outside of image
                     b[[1, 3]] = np.clip(b[[1, 3]], 0, h)
