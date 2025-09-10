@@ -3,6 +3,7 @@
 Quota su karolina: it4ifsusage
 du -h --max-depth=1
 du -sh * | sort -h 
+for d in */; do echo "$d: $(find "$d" -type f | wc -l)"; done
 
 
 #### Dataset 
@@ -31,9 +32,9 @@ du -sh * | sort -h
       - [X] Ottieni il checkpoint sul non splittato [Davide]
     - [X] Training (dataset .txt) andato a buon fine 
       - [X] Ottenuti i checkpoint
-    - [] Training (dataset .txt, ma solo 25%) andato a buon fine [Davide] - da aspettare che marco prepari i files .txt (?)
-      - [] Ottenuti i checkpoint Definitivi!
-    - [ ] Possibile sia necessario un cambio di formato checkpoint --> from pth to pt (compatibilità con objdet)
+    - [X] Training (dataset .txt, ma solo 25%) andato a buon fine [Davide] - da aspettare che marco prepari i files .txt (?)
+      - [X] Ottenuti i checkpoint Definitivi!
+    - [X] Possibile sia necessario un cambio di formato checkpoint --> from pth to pt (compatibilità con objdet)
 
 - [X] Pretraing di DenseCL [Daniele]
   - [X] Farlo partire in locale su Sunrdgd
@@ -63,13 +64,34 @@ du -sh * | sort -h
   - [ ] setup della repo in locale [Marco]
   - [X] Setup della repo su karolina [Davide]
 
-  - [ ] Portare a termine trainig parziale (set parziale di label - no pesi nostri)
+  - [X] Portare a termine trainig parziale (set parziale di label - no pesi nostri)
     - [X] Start training con i pesi forniti   
     - [X] Traduzione parziale labels from xml to txt format
-    - [ ] Training completo senza errori 
+    - [X] Training completo senza errori 
 
-  - Portare a termine trainig completo (set completo di label - pesi nostri)
-    - [ ] FORSE: modificare come salva i pesi decur
-    - [ ] Adattamento nomi layer della rete per compatibilità coi nostri pesi pretrainati (Carlo(?)) [Davide]
-    - [ ] Traduzione di tutte le label kaist from  
-    - [ ] Start training con i pesi da DeCUR
+  - [ ] Portare a termine trainig completo (set completo di label - pesi nostri)
+    - [ ] Tastare ICafusion con i files .txt --> Alla fine ho fatto in un altro modo
+    - [X] FORSE: modificare come salva i pesi decur
+    - [X] Adattamento nomi layer della rete per compatibilità coi nostri pesi pretrainati (Carlo(?)) [Davide]
+    - [X] Traduzione di tutte le label kaist  
+    - [X] Start training con i pesi da DeCUR
+
+
+#### Messaggio 
+Secondo me vi potete dividere queste tre task, come dataset userei Kaist (o Sunrgb, perchè DSEC non è molto immediato). Dividete il dataset in due parti (50-50 o anche 70-30), una parte la usate solo per il pretraining e un'altra solo per detection (quindi contiente anche il test set questa).
+- pretraining con densecl: prendete una resnet qualunque come backbone (resnet50 va benissimo), e fate due pretraining diversi per le due modalità.
+- pretraining con decur: come prima solo un solo pretraining multimodale
+- integrazione di densecl in decur
+
+Una volta fatte queste cose (in particolare, le prime due), prendiamo un qualunque modello multimodale di object detection (ad esempio GAFF, MLPD o ProbEn, quello che è più facile da integrare, su questa parte vi do una mano io) e fine tuniamo il tutto confrontando i risultati solo con il training dello stesso modello sul solo split di detection (senza pre-training). L'ultimo step poi sarà fare il pretraining multimodale decur+densecl e il fine tuning
+
+kaist/
+    visible/ # qui sono da mettere le immagini rgb
+        train/ # tutte le immagini di train
+        test/ # tutte le immagini di test
+    infrared/ # qui sono da mettere le immagini infrared
+        train/
+        test/
+    labels/ # qui sono da mettere le label
+        train/
+        test/
