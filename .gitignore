@@ -10,6 +10,8 @@ SUN_RGBD/
 DeCUR/lmdb
 DeCUR/np
 DeCUR/pickle
+*.pt 
+*.pth
 
 # Dataset folder
 ssl4eo-s12_100patches/
@@ -34,3 +36,10 @@ __pycache__/
 
 # macOS
 .DS_Store
+
+# IcaFusion
+ICAFusion/runs/*
+ICAFusion/yolov5l.pt
+ICAFusion/wandb/*
+
+
