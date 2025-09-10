@@ -492,7 +492,11 @@ def main_worker(gpu, args):
             # save checkpoint
             state = dict(epoch=epoch + 1, model=model.state_dict(),
                          optimizer=optimizer.state_dict())
+            print("saving checkpoint to", args.checkpoint_dir / 'checkpoint_{:04d}.pth'.format(epoch))
+            print(f"type of state: {type(state)}")
+            print(f"type of model: {type(model)}")
             torch.save(state, args.checkpoint_dir / 'checkpoint_{:04d}.pth'.format(epoch))
+            torch.save(model, args.checkpoint_dir / 'checkpoint_{:04d}.pt'.format(epoch)) 
 
             tb_writer.add_scalars('training log',stats,epoch)
             
