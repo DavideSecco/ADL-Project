@@ -3,10 +3,15 @@
 #SBATCH --account=eu-25-19
 #SBATCH --partition=qgpu
 #SBATCH --nodes=1
-#SBATCH --gpus=1
+#SBATCH --gres=gpu:1
 #SBATCH --time=24:00:00
-#SBATCH --error=logs/icafusion_train.err
-#SBATCH --output=logs/icafusion_train.out
+#SBATCH --error=logs/icafusion_train_pretrain.err
+#SBATCH --output=logs/icafusion_train_pretrain.out
+
+############ IMPORTANTE ###############################
+## AUMENTARE IL NUMERO DI GPU/ALZARE IL NUMERO DI WORKERS 
+## FA BLOCCARE IL TRAINING
+#######################################################
 
 echo "[INFO] Starting ICAFusion training job..."
 
@@ -33,22 +38,23 @@ python --version
 echo "[INFO] PyTorch & CUDA:"
 python - <<'PY'
 import torch
-print("Torch:", torch.__version__)
-print("CUDA :", torch.version.cuda)
-print("GPU  :", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU")
+print("Torch:", torch.__version__, flush=True)
+print("CUDA :", torch.version.cuda, flush=True)
+print("GPU  :", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU", flush=True)
 PY
 
 # === Parametri di training (personalizzabili) ===
-WEIGHTS="yolov5l.pt"                                                # --weights (DA SETTARE! nostri hanno estensione sbagliata)
+# WEIGHTS="yolov5l.pt"                                                # --weights (DA SETTARE! nostri hanno estensione sbagliata)
+WEIGHTS="/mnt/proj3/eu-25-19/davide_secco/ADL-Project/ICAFusion/checkpoint_0014_REWIRED_first636.pth"            # --weights (DA SETTARE! nostri hanno estensione sbagliata)
 CFG="./models/transformer/yolov5_ResNet50_Transfusion_kaist.yaml"   # --cfg     (DA CONFERMARE)
-DATA="./data/multispectral/kaist.yaml"                              # --data        
+DATA="./data/multispectral/kaist-karolina-scratch.yaml"                     # --data        
 HYP="data/hyp.scratch.yaml"                                         # --hyp     (LASCIO DEFAULT, MA SICURO DA CAMBIARE)
 
-EPOCHS=60
-BATCH=128                                                           # totale (per tutte le GPU). Se 1 GPU, è per-GPU.
-IMG_WIDTH=640                                                       # credo dimensione immagini kaist
-IMG_HEIGHT=512
-WORKERS=4                                                           # dataloader workers; puoi portarlo a 0 se il FS è lento
+EPOCHS=3
+BATCH=16                                                            # 8 <= optimal value < 64 (probabilemente 16 è ok)
+IMG_TRAIN=640                                                       # credo dimensione immagini kaist
+IMG_TEST=640
+WORKERS=1                                                          # dataloader workers; puoi portarlo a 0 se il FS è lento
 
 PROJECT="runs/train"                                                # NON HO CAPITO: credo non importante
 RUN_NAME="icafusion_fkaist_trasfusion"                              # NON HO CAPITO: credo non importante
@@ -75,7 +81,7 @@ CMD=(
   --hyp "$HYP"
   --epochs "$EPOCHS"
   --batch-size "$BATCH"
-  --img-size "$IMG_WIDTH" "$IMG_HEIGHT"
+  --img-size "$IMG_TRAIN" "$IMG_TEST"
   --workers "$WORKERS"
   --project "$PROJECT"
   --name "$RUN_NAME"
