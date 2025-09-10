@@ -16,7 +16,8 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
-from torch.cuda import amp
+from torch.cuda import amp # da un warning, ma usare l'altra versione forse è peggio, da testare
+# from torch import amp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -85,22 +86,46 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
     assert len(names) == nc, '%g names found for nc=%g dataset in %s' % (len(names), nc, opt.data)  # check
 
     # Model
-    pretrained = weights.endswith('.pt')
+    pretrained = weights.endswith('.pth')
     #pretrained = False
     if pretrained:
+        print("Loading pretrained model...", flush=True)
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device, weights_only=False)  # load checkpoint
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
         exclude = ['anchor'] if (opt.cfg or hyp.get('anchors')) and not opt.resume else []  # exclude keys
-        state_dict = ckpt['model'].float().state_dict()  # to FP32
+        
+        # Se continui ad avere problemi con optimizer salvati tutto
+        # torch.save(ckpt, "whole_ckpt.pth")
+
+        # Salvo State_dict ma solo la parte di model, escludo il resto
+        # state_dict = ckpt['model'].float().state_dict()  # to FP32
+        state_dict = ckpt['model']         # Mio test
+        torch.save(state_dict, "icafusion_state_dict_from_ckpt_loaded.pth")            # Necessario se vuol capire che cosa hai caricato
+        torch.save(model.state_dict(), "icafusion_state_dict_from_Model.pth")   # Per capire cosa si aspetta il modelo
+
+        print(f"state_dict keys: {list(state_dict.keys())}", flush=True)
+        print(f"model.state_dict() keys: {list(model.state_dict().keys())}", flush=True)
+        print(f"exclude keys: {exclude}", flush=True)
+        
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
+        print(f"state_dict keys (after intersect_dicts): {list(state_dict.keys())}", flush=True)
+        print(f"len(state_dict) (after intersect_dicts): {len(state_dict)}", flush=True)
+        
         new_state_dict = state_dict
         for key in list(state_dict.keys()):
             new_state_dict[key[:6] + str(int(key[6])+10) + key[7:]] = state_dict[key]
+
+        print(f"new_state_dict keys: {list(new_state_dict.keys())}", flush=True)
         model.load_state_dict(new_state_dict, strict=False)  # load
+
+        print(f"model.state_dict() keys (after load_state_dict): {list(model.state_dict().keys())}", flush=True)
+        print(f"state_dict: {len(model.state_dict())}", flush=True)
+
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
+        print("Creating model... (i weights impostati non sono serviti(?)", flush=True)
         model = Model(opt.cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
 
     with torch_distributed_zero_first(rank):
@@ -158,6 +183,12 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
 
     # Resume
     start_epoch, best_fitness = 0, 0.0
+
+    # Non voglio che entri, perchè optimizer crea problemi, forse si può creare un checkpoint
+    # con solo model cosi da non dover fare questi settaggi
+    # Anche se ad esempio con le epoche non avrebbe molto senso
+    pretrained = False
+
     if pretrained:
         # Optimizer
         if ckpt['optimizer'] is not None:
@@ -198,6 +229,9 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
     if opt.sync_bn and cuda and rank != -1:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
         logger.info('Using SyncBatchNorm()')
+
+    print(f"train_path_rgb: {train_path_rgb}", flush=True)
+    print(f"train_path_ir: {train_path_ir}", flush=True)
 
     # Trainloader
     dataloader, dataset = create_dataloader_rgb_ir(train_path_rgb, train_path_ir, imgsz, batch_size, gs, opt,
@@ -380,6 +414,7 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
             final_epoch = epoch + 1 == epochs
             if not opt.notest or final_epoch:  # Calculate mAP
                 wandb_logger.current_epoch = epoch + 1
+                print("Calling test.test() from test.py", flush=True)
                 results, maps, MRresult, times = test.test(data_dict,
                                                            batch_size=1,
                                                            imgsz=imgsz_test,
