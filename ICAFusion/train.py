@@ -105,23 +105,23 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
         torch.save(state_dict, "icafusion_state_dict_from_ckpt_loaded.pth")            # Necessario se vuol capire che cosa hai caricato
         torch.save(model.state_dict(), "icafusion_state_dict_from_Model.pth")   # Per capire cosa si aspetta il modelo
 
-        print(f"state_dict keys: {list(state_dict.keys())}", flush=True)
-        print(f"model.state_dict() keys: {list(model.state_dict().keys())}", flush=True)
+        print(f"state_dict keys[:10]: {list(state_dict.keys())[:10]}", flush=True)
+        print(f"model.state_dict()[:10] keys: {list(model.state_dict().keys())[:10]}", flush=True)
         print(f"exclude keys: {exclude}", flush=True)
         
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
-        print(f"state_dict keys (after intersect_dicts): {list(state_dict.keys())}", flush=True)
+        print(f"state_dict keys[:10] (after intersect_dicts): {list(state_dict.keys())[:10]}", flush=True)
         print(f"len(state_dict) (after intersect_dicts): {len(state_dict)}", flush=True)
         
         new_state_dict = state_dict
         for key in list(state_dict.keys()):
             new_state_dict[key[:6] + str(int(key[6])+10) + key[7:]] = state_dict[key]
 
-        print(f"new_state_dict keys: {list(new_state_dict.keys())}", flush=True)
+        print(f"new_state_dict keys[:10]: {list(new_state_dict.keys())[:10]}", flush=True)
         model.load_state_dict(new_state_dict, strict=False)  # load
 
-        print(f"model.state_dict() keys (after load_state_dict): {list(model.state_dict().keys())}", flush=True)
-        print(f"state_dict: {len(model.state_dict())}", flush=True)
+        print(f"model.state_dict() keys[:10] (after load_state_dict): {list(model.state_dict().keys())[:10]}", flush=True)
+        print(f"len state_dict: {len(model.state_dict())}", flush=True)
 
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
@@ -234,21 +234,24 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
     print(f"train_path_ir: {train_path_ir}", flush=True)
 
     # Trainloader
+    print("Creating training dataloader...", flush=True)
     dataloader, dataset = create_dataloader_rgb_ir(train_path_rgb, train_path_ir, imgsz, batch_size, gs, opt,
                                                    hyp=hyp, augment=True, cache=opt.cache_images, rect=opt.rect, rank=rank,
                                                    world_size=opt.world_size, workers=opt.workers,
                                                    image_weights=opt.image_weights, quad=opt.quad, prefix=colorstr('train: '))
+    print(f"Training dataloader created", flush=True)
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
     nb = len(dataloader)  # number of batches
     assert mlc < nc, 'Label class %g exceeds nc=%g in %s. Possible class labels are 0-%g' % (mlc, nc, opt.data, nc - 1)
 
     # Process 0
     if rank in [-1, 0]:
+        print("Creating testing dataloader...", flush=True)
         testloader, testdata = create_dataloader_rgb_ir(test_path_rgb, test_path_ir,imgsz_test, 1, gs, opt,
                                                         hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True,
                                                         rank=-1, world_size=opt.world_size, workers=opt.workers,
                                                         pad=0.5, prefix=colorstr('val: '))
-
+        print(f"Testing dataloader created", flush=True)
         if not opt.resume:
             labels = np.concatenate(dataset.labels, 0)
             c = torch.tensor(labels[:, 0])  # classes
@@ -286,7 +289,8 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
     nw = max(round(hyp['warmup_epochs'] * nb), 1000)  # number of warmup iterations, max(3 epochs, 1k iterations)
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
     maps = np.zeros(nc)  # mAP per class
-    MRresult = 0.0
+    # MRresult = 0.0
+    MRresult = [0.0 for indx in range(0,10)]       # tentativo, perchè se faccio il train ad ogni epoca, deve essere una lista
     results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
@@ -391,6 +395,21 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
             if rank in [-1, 0]:
                 mloss = (mloss * i + loss_items) / (i + 1)  # update mean losses
                 mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
+                # Costruisce la stringa di descrizione per la barra di progresso (pbar):
+                # - ('%10s' * 2)  → riserva due campi di 10 caratteri, formattati come stringhe
+                # - ('%10.4g' * 6) → riserva sei campi di 10 caratteri, formattati come numeri
+                #   floating-point con massimo 4 cifre significative
+                # In totale si ottengono 8 colonne allineate per una visualizzazione tabellare.
+                #
+                # I valori passati sono:
+                #   1) '%g/%g' % (epoch, epochs - 1) → epoca corrente / numero totale di epoche
+                #   2) mem → utilizzo di memoria corrente
+                #   3-? ) *mloss → valori delle componenti di loss (scompattati)
+                #   penultimo) targets.shape[0] → numero di target (es. bounding box) nel batch
+                #   ultimo) imgs.shape[-1] → dimensione delle immagini (es. 640)
+                #
+                # Infine, pbar.set_description(s) mostra questa stringa come descrizione della
+                # progress bar, permettendo di monitorare andamento training con valori leggibili.
                 s = ('%10s' * 2 + '%10.4g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
                 pbar.set_description(s)
 
@@ -439,13 +458,13 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                     'x/lr0', 'x/lr1', 'x/lr2',  # learning rate
                     'MR_all', 'MR_day', 'MR_night', 'MR_near', 'MR_medium', 'MR_far', 'MR_none', 'MR_partial', 'MR_heavy', 'Recall_all'  # MR
                     ]
+            print(type(MRresult))
+            print(f"MRresult: {MRresult}")
+            print(f"len(MRresult) {len(MRresult)}")
             vals = list(mloss) + list(results) + lr + MRresult
             dicts = {k: v for k, v in zip(keys, vals)}  # dict
+            print(f"dicts {dicts}")
             file = save_dir / 'results.csv'
-            n = len(dicts) + 1  # number of cols
-            s = '' if file.exists() else (('%s,' * n % tuple(['epoch'] + keys)).rstrip(',') + '\n')  # add header
-            with open(file, 'a') as f:
-                f.write(s + ('%g,' * n % tuple([epoch] + vals)).rstrip(',') + '\n')
 
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
@@ -614,6 +633,8 @@ if __name__ == '__main__':
         hyp = yaml.safe_load(f)  # load hyps
 
     # Train
+    
+    print(f"opt.evolve: {opt.evolve}", flush=True)
     logger.info(opt)
     if not opt.evolve:
         tb_writer = None  # init loggers
@@ -622,6 +643,10 @@ if __name__ == '__main__':
             logger.info(f"{prefix}Start with 'tensorboard --logdir {opt.project}', view at http://localhost:6006/")
             tb_writer = SummaryWriter(opt.save_dir)  # Tensorboard
 
+            print(f"opt: {opt}", flush=True)
+            print(f"hyp: {hyp}", flush=True)
+            print(f"device: {device}", flush=True)
+            print(f"Launching train_rgb_ir", flush=True)
             train_rgb_ir(hyp, opt, device, tb_writer)
 
     # Evolve hyperparameters (optional)
