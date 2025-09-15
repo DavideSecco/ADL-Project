@@ -32,32 +32,40 @@ Come già accennato, questo file rappresenta lo split ufficiale per la fase di t
 
 N.B. Nel nostro caso, useremo questa suddivisione per valutare le performance finali durante la fase di object detection.
 
-### 3) Training_forSSL_pretraining_25
-Questa lista è stata generata a partire da training_split_50, selezionando una riga (cioè una coppia) ogni due.
-Di conseguenza, contiene tutte le coppie in posizione pari, dal Set00 fino al Set05 (incluso).
+### 3) Training_split_25_forSSL
+Questa lista è stata generata a partire da training_split_50, separando i blocchi di immagini in base all’indice Vxxx.
+In particolare, i blocchi vengono assegnati alternativamente a questo file e al file gemello: il primo blocco (V000) confluisce qui, il successivo (V001) nell’altro file, e così via, continuando in modo sequenziale anche al cambio di set.
+
+Esempio: 
+```
+set00/V001/I00000
+set00/V001/I00001
+set00/V001/I00002
+...
+set00/V003/I00000
+set00/V003/I00001
+...
+...
+```
+In totale, la lista è composta da 23 349 coppie, pari a circa il 50% di training_split_50 e quindi al 25% dell’intero dataset originale.
+
+N.B. Questa lista verrà utilizzata per eseguire il pretraining Self-Supervised dei diversi modelli.
+
+### 4) Training_split_25_forObjDet
+Questa lista rappresenta la parte complementare della precedente.
+Anch’essa è stata generata dividendo i blocchi Vxxx in modo alternato, continuando in modo sequenziale anche al cambio di set.
 
 Esempio: 
 ```
 set00/V000/I00000
-set00/V000/I00002
-set00/V000/I00004
-...
-```
-In totale, la lista è composta da 25.092 coppie, pari al 50% di training_split_50 e quindi al 25% dell’intero dataset originale.
-
-N.B. Questa lista verrà utilizzata per eseguire il pretraining Self-Supervised dei diversi modelli.
-
-### 4) Training_forObJDet_finetuning_25
-Questa lista è la complementare di quella descritta in precedenza. È stata costruita selezionando dall’insieme training_split_50 la metà delle coppie non incluse in training_forSSL_pretraining.
-In pratica, raccoglie tutte le coppie in posizione dispari, dal Set00 fino al Set05 (incluso).
-
-Esempio:
-```
 set00/V000/I00001
-set00/V000/I00003
-set00/V000/I00005
+set00/V000/I00002
+...
+set00/V002/I00000
+set00/V002/I00001
+...
 ...
 ```
-In totale, la lista è composta da 25.092 coppie, pari al 50% di training_split_50 e quindi al 25% dell’intero dataset originale.
+In totale, la lista è composta da 26 835 coppie, pari a circa il 50% di training_split_50 e quindi al 25% dell’intero dataset originale.
 
-N.B. Questa lista verrà utilizzata per il training nella fase di Object Detection dei diversi modelli.
+N.B. Questa lista verrà utilizzata per eseguire il training di Obj Detection dei diversi modelli.
