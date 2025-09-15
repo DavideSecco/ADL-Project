@@ -47,11 +47,11 @@ PY
 # WEIGHTS="yolov5l.pt"                                                # --weights (DA SETTARE! nostri hanno estensione sbagliata)
 WEIGHTS="/mnt/proj3/eu-25-19/davide_secco/ADL-Project/ICAFusion/checkpoint_0014_REWIRED_first636.pth"            # --weights (DA SETTARE! nostri hanno estensione sbagliata)
 CFG="./models/transformer/yolov5_ResNet50_Transfusion_kaist.yaml"   # --cfg     (DA CONFERMARE)
-DATA="./data/multispectral/kaist-karolina-scratch.yaml"                     # --data        
+DATA="./data/multispectral/kaist-karolina-scratch-small.yaml"                     # --data        
 HYP="data/hyp.scratch.yaml"                                         # --hyp     (LASCIO DEFAULT, MA SICURO DA CAMBIARE)
 
 EPOCHS=3
-BATCH=16                                                            # 8 <= optimal value < 64 (probabilemente 16 è ok)
+BATCH=28                                                            # 16 <= optimal value < 64 (probabilemente 16 è ok) (16 --> 20 min a epoca) (22 --> 18 min a epoca)
 IMG_TRAIN=640                                                       # credo dimensione immagini kaist
 IMG_TEST=640
 WORKERS=1                                                          # dataloader workers; puoi portarlo a 0 se il FS è lento
@@ -86,6 +86,7 @@ CMD=(
   --project "$PROJECT"
   --name "$RUN_NAME"
   --exist-ok
+  --notest
 )
 
 # Opzionali: abilita/disabilita aggiungendo i flag desiderati (scommenta se utili)
