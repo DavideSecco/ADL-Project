@@ -435,6 +435,7 @@ class LoadImagesAndLabels(Dataset):  # for training/testing
         except Exception as e:
             raise Exception(f'{prefix}Error loading data from {path}: {e}\nSee {help_url}')
 
+        print(f"Caching labels...", flush=True)
         # Check cache
         self.label_files = img2label_paths(self.img_files)  # labels
         # print(self.label_files)
@@ -740,6 +741,8 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
             self.img_files_rgb = sorted([x.replace('/', os.sep) for x in f_rgb if x.split('.')[-1].lower() in img_formats])
             self.img_files_ir = sorted([x.replace('/', os.sep) for x in f_ir if x.split('.')[-1].lower() in img_formats])
 
+            print(f"Found {len(self.img_files_rgb)} RGB images and {len(self.img_files_ir)} IR images", flush=True)
+
             # self.img_files = sorted([x for x in f if x.suffix[1:].lower() in img_formats])  # pathlib
             assert (self.img_files_rgb, self.img_files_ir), (f'{prefix}No images found', f'{prefix}No images found')
         except Exception as e:
@@ -747,6 +750,8 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
 
         # Check cache
         # Check rgb cache
+        
+        print(f"Chaching img labels..")
         self.label_files_rgb = img2label_paths(self.img_files_rgb)  # labels
         # print(f"self.label_files_rgb: {self.label_files_rgb}")
         # print(self.label_files)
@@ -759,7 +764,8 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
         else:
             cache_rgb, exists_rgb = self.cache_labels(self.img_files_rgb,self.label_files_rgb,
                                                       cache_rgb_path, prefix), False  # cache
-
+        print(f"Labels img cached", flush=True)
+        print(f"Chaching ir labels..", flush=True)
         # Check ir cache
         self.label_files_ir = img2label_paths(self.img_files_ir)  # labels
         # print(self.label_files)
@@ -772,7 +778,7 @@ class LoadMultiModalImagesAndLabels(Dataset):  # for training/testing
         else:
             cache_ir, exists_ir = self.cache_labels(self.img_files_ir, self.label_files_ir,
                                                     cache_ir_path, prefix), False  # cache
-
+        print(f"Labels ir cached", flush=True)
         # Display cache
         nf_rgb, nm_rgb, ne_rgb, nc_rgb, n_rgb = cache_rgb.pop('results')  # found, missing, empty, corrupted, total
         nf_ir, nm_ir, ne_ir, nc_ir, n_ir = cache_ir.pop('results')  # found, missing, empty, corrupted, total
