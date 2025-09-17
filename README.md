@@ -48,10 +48,9 @@ for d in */; do echo "$d: $(find "$d" -type f | wc -l)"; done
   - [X] Farlo partire in locale su Kaist
   - [X] Farlo partire su Karolina su Kaist
      
-- [ ] Aspetti da considerare prima del pre-training
-  - [ ] definire augmentations usate per KAIST
-    - [ ] confrontare con quelle di DenseCL: ci sono differenze?possono essere integrate?
-  - [ ] trovare dimensione comune embedding DeCUR
+- [X] Aspetti da considerare prima del pre-training
+  - [X] definire augmentations usate per KAIST
+  - [X] trovare dimensione comune embedding DeCUR
   
 - [ ] far partire pre-training
   - [ ] DenseCL
