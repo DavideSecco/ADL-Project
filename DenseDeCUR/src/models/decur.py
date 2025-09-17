@@ -3,43 +3,46 @@ import torch.nn as nn
 import torchvision
 
 
+
 def off_diagonal(x):
     n, m = x.shape
     assert n == m
     return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
-''' DeCUR '''
+
+
 class DeCUR(nn.Module):
     def __init__(self, args):
         super().__init__()
         
         self.args = args
         
-        # backbone
-        self.backbone_1 = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
-        self.backbone_2 = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
+        # 1) backbone
+        self.backbone_1    = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
         self.backbone_1.fc = nn.Identity()
+
+        self.backbone_2    = torchvision.models.resnet50(zero_init_residual=True,pretrained=True)
         self.backbone_2.fc = nn.Identity()            
 
-        # projector: build projector MLPs for each backbone output
+
+        # 2) projector
         sizes = [2048] + list(map(int, args.projector.split('-'))) # e.g. sizes = [2048, 8192, 8192, 8192]
 
-        # build MLP with linear layers + BatchNorm + ReLU (except last layer)
         layers = []
         for i in range(len(sizes) - 2):
-            layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))
-            layers.append(nn.BatchNorm1d(sizes[i + 1]))
-            layers.append(nn.ReLU(inplace=True))
-        # final linear layer without activation
-        layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))
+            layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=False))  # Linear
+            layers.append(nn.BatchNorm1d(sizes[i + 1]))                   # BatchNorm
+            layers.append(nn.ReLU(inplace=True))                          # ReLU
+        layers.append(nn.Linear(sizes[-2], sizes[-1], bias=False))        # Linear
 
-        # Define two separate projectors (one for each modality/view)
         self.projector1 = nn.Sequential(*layers)
         self.projector2 = nn.Sequential(*layers)
 
-        # final normalization layer for the representations z1 and z2:
-        # affine=False → no learnable parameters, just statistical normalization
+
+        # 3) final normalization layer 
         self.bn = nn.BatchNorm1d(sizes[-1], affine=False)
+
+
 
     def bt_loss_cross(self, z1, z2):
         # Compute normalized cross-correlation matrix
@@ -75,6 +78,7 @@ class DeCUR(nn.Module):
         return loss_c,on_diag_c,off_diag_c,loss_u,on_diag_u,off_diag_u   
 
 
+
     def bt_loss_single(self, z1, z2):
         # Compute normalized cross-correlation matrix
         c = self.bn(z1).T @ self.bn(z2)
@@ -96,7 +100,9 @@ class DeCUR(nn.Module):
         return loss,on_diag,off_diag
 
 
+
     def forward(self, y1_1,y1_2,y2_1,y2_2):
+        
         # extract backbone features
         f1_1 = self.backbone_1(y1_1)
         f1_2 = self.backbone_1(y1_2)

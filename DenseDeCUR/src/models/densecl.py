@@ -14,6 +14,7 @@ class DenseCL(nn.Module):
                  momentum=0.999,
                  loss_lambda=0.5):
         super(DenseCL, self).__init__()
+        
         self.encoder_q = nn.Sequential( resnet50(), DenseCLNeck(in_channels=2048, hid_channels=2048, out_channels=feat_dim) )
         self.encoder_k = nn.Sequential( resnet50(), DenseCLNeck(in_channels=2048, hid_channels=2048, out_channels=feat_dim) )
 

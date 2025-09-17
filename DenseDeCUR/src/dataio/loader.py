@@ -5,6 +5,7 @@ from cvtorchvision import cvtransforms
 from .rs_transforms_uint8 import RandomChannelDrop, RandomBrightness, RandomContrast, ToGray, GaussianBlur, Solarize
 
 
+
 class TwoCropsTransform:
     """prende un'immagine e restituisce due versioni augmentate q e k, in base a base_transform"""
     def __init__(self, base_transform):
@@ -13,6 +14,7 @@ class TwoCropsTransform:
         q = self.base_transform(x)
         k = self.base_transform(x)
         return [q, k]
+
 
 
 def kaist_rgb_train_transforms(img_size=224):
@@ -26,13 +28,17 @@ def kaist_rgb_train_transforms(img_size=224):
         cvtransforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225]),
     ])
 
+
+
 def kaist_th_train_transforms(img_size=224):
     return cvtransforms.Compose([
         cvtransforms.RandomResizedCrop(img_size, scale=(0.5, 1.0)),
         cvtransforms.RandomHorizontalFlip(),
         cvtransforms.ToTensor(),
-        cvtransforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225]),
+        # cvtransforms.Normalize([0.485,0.456,0.406],[0.229,0.224,0.225]), sono le statistiche di ImageNet per RGB (non thermal)
     ])
+
+
 
 def build_kaist_transforms(img_size=224):
     t_rgb = TwoCropsTransform(kaist_rgb_train_transforms(img_size))

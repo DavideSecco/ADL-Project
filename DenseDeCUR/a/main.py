@@ -1,5 +1,7 @@
+# multimodal self-supervised learning with DeCUR
+# Adapted from https://github.com/facebookresearch/barlowtwins
+
 from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
 import argparse
 import json
 import math
@@ -14,19 +16,23 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torchvision
-import torch.distributed as dist
+from torch.utils.tensorboard import SummaryWriter
+import torch.distributed 
 import torch.nn.functional as F
 import diffdist
+
+# PICCOLO FIX: necessario solo sul karolina perché il venv creato in realtá é 3.11 
+# e iterable non é piú in collections, se riesci a rifare env con python 3.9.6 come da istruzioni
+# lo puoi togliere
 import collections
 import collections.abc
 collections.Iterable = collections.abc.Iterable
 
-
-from src.models.decur               import DeCUR
-from src.models.densecl             import DenseCL
-from src.models.densedecur          import DenseDeCUR
-from src.dataio.kaist_dataset_list  import KAISTDatasetFromList
-from src.dataio.loader              import build_kaist_transforms
+from src.models.decur         import DeCUR
+from src.models.densedecur    import DenseDeCUR
+from src.models.densecl       import DenseCL
+from src.dataio.kaist_dataset import KAISTDataset
+from src.dataio.loader        import build_kaist_transforms
 
 # no warnings
 import warnings
@@ -34,71 +40,71 @@ warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
 
-parser = argparse.ArgumentParser(description='Multimodal Self-Supervised Pretraining')
-parser.add_argument('--dataset', type=str, choices=['KAIST'])  
-parser.add_argument('--method', type=str, choices=['DeCUR','DenseCL','DenseDeCUR'])   
-parser.add_argument('--densecl_stream', type=str, default='rgb', choices=['rgb','thermal'])                  
+# from cvtorchvision import cvtransforms
+# from utils.rs_transforms_uint8 import RandomChannelDrop,RandomBrightness,RandomContrast,ToGray,GaussianBlur,Solarize
+# import pdb
 
-# parser.add_argument('--data1', type=str, metavar='DIR', help='path to dataset')
-# parser.add_argument('--data2', type=str, metavar='DIR', help='path to dataset')
-
-parser.add_argument('--workers', default=8, type=int)
-parser.add_argument('--epochs', default=1000, type=int)
-parser.add_argument('--batch-size', default=128, type=int)
-
-
-# decur training
-parser.add_argument('--learning-rate-weights', default=0.002, type=float)
-parser.add_argument('--learning-rate-biases', default=0.00048, type=float)
-parser.add_argument('--weight-decay', default=1e-4, type=float)
-parser.add_argument('--lambd', default=0.0051, type=float)
-parser.add_argument('--projector', default='8192-8192-8192', type=str)
-parser.add_argument('--lr', default=0.2, type=float)
+parser = argparse.ArgumentParser(description='Multimodal self-Supervised Pretraining')
+parser.add_argument('--dataset', type=str,
+                    help='pretraining dataset', choices=['KAIST'])  
+parser.add_argument('--method', type=str,
+                    help='pretraining method', choices=['DeCUR','DenseCL','DenseDeCUR'])  
+parser.add_argument('--densecl_stream', type=str, default='rgb',
+                    choices=['rgb','thermal'],
+                    help='per DenseCL: scegli la stream da usare (rgb o thermal)')                  
+parser.add_argument('--data1', type=str, metavar='DIR',
+                    help='path to dataset')
+parser.add_argument('--data2', type=str, metavar='DIR',
+                    help='path to dataset')
+parser.add_argument('--workers', default=8, type=int, metavar='N',
+                    help='number of data loader workers')
+parser.add_argument('--epochs', default=1000, type=int, metavar='N',
+                    help='number of total epochs to run')
+parser.add_argument('--batch-size', default=32, type=int, metavar='N', # 128 <= valore per karolina < 1024
+                    help='mini-batch size')
+parser.add_argument('--learning-rate-weights', default=0.002, type=float, metavar='LR',
+                    help='base learning rate for weights')
+parser.add_argument('--learning-rate-biases', default=0.00048, type=float, metavar='LR',
+                    help='base learning rate for biases and batch norm parameters')
+parser.add_argument('--weight-decay', default=1e-4, type=float, metavar='W',
+                    help='weight decay')
+parser.add_argument('--lambd', default=0.0051, type=float, metavar='L',
+                    help='weight on off-diagonal terms')
+parser.add_argument('--projector', default='8192-8192-8192', type=str,
+                    metavar='MLP', help='projector MLP')
+parser.add_argument('--print-freq', default=100, type=int, metavar='N',
+                    help='print frequency')
+parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path,
+                    metavar='DIR', help='path to checkpoint directory')
+parser.add_argument('--lr', default=0.2, type=float) # no effect
 parser.add_argument('--cos', action='store_true', default=False)
 parser.add_argument('--schedule', default=[120,160], nargs='*', type=int)
-parser.add_argument('--dim_common', type=int, default=448)
 
-
-# training settings
-parser.add_argument('--print-freq', default=100, type=int)
-parser.add_argument('--pretrained', type=str, default='',help='pretrained path.')
-parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path)
-parser.add_argument('--resume', type=str, default='',help='resume path.')
-
-
-
-# parser.add_argument('--mode', nargs='*', default=['s1','s2c'], help='bands to process')
+parser.add_argument('--mode', nargs='*', default=['rgb','thermal'], help='bands to process')
 parser.add_argument('--train_frac', type=float, default=1.0)
-# parser.add_argument('--backbone', type=str, default='resnet50')
+#parser.add_argument('--backbone', type=str, default='resnet50')
+parser.add_argument('--resume', type=str, default='',help='resume path.')
+parser.add_argument('--dim_common', type=int, default=100) # common dimensions ATTENZIONEEEEEEEEEEEEEEEEE dipende se usi DeCUR o DenseDeCUR
 
-
-
-parser.add_argument('--data-root', type=str, default='~/ADL-Project/kaist-cvpr15/images',
-                    help='root del dataset KAIST (cartella che contiene setxx/Vyyy/{visible,lwir})')  
-parser.add_argument('--list-train', type=str, required=False,
-                    help='file txt con la lista per il training (relative paths)')
-parser.add_argument('--list-test', type=str, required=False,
-                    help='file txt con la lista per il test/val (relative paths)')
-
-# parser.add_argument('--ext-vis', type=str, default='.jpg', help='estensione immagini visibili (default .jpg)')
-# parser.add_argument('--ext-lwir', type=str, default='.jpg', help='estensione immagini lwir (default .jpg)')
-
-
-
+parser.add_argument('--pretrained', type=str, default='',help='pretrained path.')
 
 #########################
 #### dist parameters ###
 #########################
-parser.add_argument("--dist_url", default="env://", type=str)
-parser.add_argument("--world_size", default=-1, type=int, help='set automatically')
-parser.add_argument("--rank", default=0, type=int, help='set automatically')
-# parser.add_argument("--local_rank", default=0, type=int, help="this argument is not used and should be ignored")
+parser.add_argument("--dist_url", default="env://", type=str, help="""url used to set up distributed
+                    training; see https://pytorch.org/docs/stable/distributed.html""")
+parser.add_argument("--world_size", default=-1, type=int, help="""
+                    number of processes: it is set automatically and
+                    should not be passed as argument""")
+parser.add_argument("--rank", default=0, type=int, help="""rank of this process:
+                    it is set automatically and should not be passed as argument""")
+parser.add_argument("--local_rank", default=0, type=int,
+                    help="this argument is not used and should be ignored")
 parser.add_argument('--seed', type=int, default=42)
 
 
-
 def init_distributed_mode(args):
-    
+
     args.is_slurm_job = "SLURM_JOB_ID" in os.environ
 
     if args.is_slurm_job:
@@ -132,12 +138,13 @@ def init_distributed_mode(args):
     return   
 
 
-
 def fix_random_seeds(seed=42):
+    """
+    Fix random seeds.
+    """
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
     np.random.seed(seed)
-
 
 
 def main():
@@ -152,35 +159,37 @@ def main():
     main_worker(gpu=None,args=args)
 
 
-
 def main_worker(gpu, args):
-
     # create tb_writer
     if args.rank==0 and not os.path.isdir(args.checkpoint_dir):
         os.makedirs(args.checkpoint_dir,exist_ok=True)
     if args.rank==0:
         tb_writer = SummaryWriter(os.path.join(args.checkpoint_dir,'log'))
+
     if args.rank == 0:
         args.checkpoint_dir.mkdir(parents=True, exist_ok=True)
         stats_file = open(args.checkpoint_dir / 'stats.txt', 'a', buffering=1)
         print(' '.join(sys.argv))
         print(' '.join(sys.argv), file=stats_file)
-
-
+    
+    
     # select model
     if args.method == 'DeCUR':
+        # per runnare su CPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = DeCUR(args).to(device)
     elif args.method == 'DenseCL':        
+        # per runnare su CPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = DenseCL(pretrained=True).to(device)
     elif args.method == 'DenseDeCUR':
+        # per runnare su CPU:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = DenseDeCUR(args).to(device)
 
-
+    
     param_weights = []
-    param_biases  = []
+    param_biases = []
     for param in model.parameters():
         if param.ndim == 1:
             param_biases.append(param)
@@ -195,7 +204,6 @@ def main_worker(gpu, args):
     else:
         model = model.cpu()
         model = torch.nn.parallel.DistributedDataParallel(model)
-
 
     # select optmizer
     if args.method == 'DeCUR':
@@ -213,38 +221,35 @@ def main_worker(gpu, args):
         # optimizer = torch.optim.SGD(model.parameters(), args.lr,
         #                    momentum=0.9,
         #                    weight_decay=1e-4)
-    
 
     # automatically resume from checkpoint if it exists
     if args.resume:
-        ckpt = torch.load(args.resume, map_location='cpu')
+        ckpt = torch.load(args.resume,
+                          map_location='cpu')
         start_epoch = ckpt['epoch']
         model.load_state_dict(ckpt['model'])
         optimizer.load_state_dict(ckpt['optimizer'])
     else:
         start_epoch = 0    
     
-    # dataset
-    rgb_t, th_t = build_kaist_transforms(img_size=224)
+    # choose which dataset for pretraining
+    if args.dataset == 'KAIST':          
+        
+        rgb_t, th_t = build_kaist_transforms(img_size=224)
 
-    if args.data_root is not None and args.list_train is not None:
-        train_dataset = KAISTDatasetFromList(     
-            data_root=args.data_root,
-            list_file=args.list_train,
-            rgb_transform=rgb_t,
-            th_transform=th_t)
-            # tolto mode = args.mode, ext_vis, ext_lwir
+        train_dataset = KAISTDataset(
+            rgb_dir=args.data1,
+            th_dir=args.data2,
+            rgb_transform=rgb_t,   
+            th_transform=th_t,   
+            mode=args.mode  
+        )
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
     train_loader = torch.utils.data.DataLoader(
-        train_dataset, 
-        batch_size=args.batch_size, 
-        shuffle=(train_sampler is None),
-        num_workers=args.workers, 
-        pin_memory=args.is_slurm_job, 
-        sampler=train_sampler, 
-        drop_last=True)
+        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+        num_workers=args.workers, pin_memory=args.is_slurm_job, sampler=train_sampler, drop_last=True)
 
     print(f"[DEBUG] train_loader has {len(train_loader)} batches")
     print(f'[INFO] Start training')
@@ -253,20 +258,23 @@ def main_worker(gpu, args):
     start_time = time.time()
     scaler = torch.cuda.amp.GradScaler()
     
+    print(f'[INFO] ciao 1')
     stats = {}
     loss = None
     for epoch in range(start_epoch, args.epochs):
-        
+        print(f'[INFO] ciao 2')
         train_sampler.set_epoch(epoch)
         adjust_learning_rate(args, optimizer, epoch)
+        print(f'[INFO] ciao 3')
         
         for step, (y1, y2) in enumerate(train_loader, start=epoch * len(train_loader)):
-            
+            print(f'[INFO] ciao 4')
             device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             y1_1 = y1[0].to(device, non_blocking=True)
             y1_2 = y1[1].to(device, non_blocking=True)
             y2_1 = y2[0].to(device, non_blocking=True)
             y2_2 = y2[1].to(device, non_blocking=True)
+            print(f'[INFO] ciao 5')
                         
             optimizer.zero_grad()
             
@@ -285,36 +293,37 @@ def main_worker(gpu, args):
                     loss1, loss2, _ = model.forward(im_q, im_k) 
                     loss = loss1 + loss2
 
-
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
+            # pdb.set_trace()
             
-            
+
             if step % args.print_freq == 0:
                 if args.rank == 0:
-                    stats = dict(epoch=epoch, step=step,
+                    stats = dict(epoch=epoch, 
+                                 step=step,
                                  #lr_weights=optimizer.param_groups[0]['lr'],
                                  #lr_biases=optimizer.param_groups[1]['lr'],
                                  #lr=optimizer.param_groups['lr'],
                                  loss=loss.item(),
+                                 #loss_contra_single=loss_contra_single.item(),
+                                 #loss_contra_dense=loss_contra_dense.item(),
                                  loss1=loss1.item(),
                                  loss2=loss2.item(),
-                                 # loss12=loss12.item(),
+                                 #loss12=loss12.item(),
                                  #on_diag12_c=on_diag12_c.item(),
                                  time=int(time.time() - start_time))
-                    print(json.dumps(stats), flush=True)
-                    print(json.dumps(stats), file=stats_file, flush=True)
+                    print(json.dumps(stats))
+                    print(json.dumps(stats), file=stats_file)
     
-        # Salvo ogni 100 epoche oppure all'ultima
-        if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
+        if args.rank == 0 and epoch%100==0:
             # save checkpoint
             state = dict(epoch=epoch + 1, model=model.state_dict(),
                          optimizer=optimizer.state_dict())
             torch.save(state, args.checkpoint_dir / 'checkpoint_{:04d}.pth'.format(epoch))
 
             tb_writer.add_scalars('training log',stats,epoch)
- 
             
 
 def adjust_learning_rate(args, optimizer, epoch):
@@ -326,10 +335,8 @@ def adjust_learning_rate(args, optimizer, epoch):
         for milestone in args.schedule:
             w *= 0.1 if epoch >= milestone else 1.
     optimizer.param_groups[0]['lr'] = w * args.learning_rate_weights
-    
     if optimizer.__class__.__name__ == 'LARS':
         optimizer.param_groups[1]['lr'] = w * args.learning_rate_biases 
-
      
 
 def handle_sigusr1(signum, frame):
@@ -337,10 +344,8 @@ def handle_sigusr1(signum, frame):
     exit()
 
 
-
 def handle_sigterm(signum, frame):
     pass
-
 
 
 class LARS(optim.Optimizer):
@@ -383,7 +388,6 @@ class LARS(optim.Optimizer):
                 mu.mul_(g['momentum']).add_(dp)
 
                 p.add_(mu, alpha=-g['lr'])
-
 
 
 if __name__ == '__main__':
