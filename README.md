@@ -7,73 +7,47 @@ for d in */; do echo "$d: $(find "$d" -type f | wc -l)"; done
 
 
 #### Dataset 
-- [ ] Dataset KAIST:
+- [X] Dataset KAIST:
   - [X] Scaricare su Karolina [Davide]
-  - [ ] Spltittare su Karolina [Marco/Davide]
-- [ ] Dataset Sunrgbd
-  - [X] Scaricare su Karolina
-  - [ ] Splittare su Karolina [Marco/Davide]
+  - [X] Spltittare su Karolina [Marco/Davide]
+ 
+- [ ] Dataset Sunrgbd [Da splittare? Ci serve ancora?] Splittare su Karolina [Marco/Davide]
 
 #### Modelli
 
 - [ ] Pretraining di Decur [Davide]
+  - [ ] Sistema classe KaistDataset, creane una sola? [Marco]
   - [X] Sunrgbd su Karolina [Davide]
-    - [X] Sistema cvtorchvision
-    - [X] Fatto partire non splittato
-    - [X] Training (dataset non splittato) andato a buon fine
-      - [X] Ottieni i checkpoint sul non splittato [Davide]
-    - [?] Training (dataset splittato) andato a buon fine (Non necessario)
-    
-  - [X] KAIST in locale [Marco]
-    - [ ] Sistema classe KaistDataset, creane una sola?
-  - [X] KAIST su Karolina [Davide] 
-    - [X] Fatto partire non splittato
-    - [X] Training (dataset standard) andato a buon fine [Davide]
-      - [X] Ottieni il checkpoint sul non splittato [Davide]
-    - [X] Training (dataset .txt) andato a buon fine 
-      - [X] Ottenuti i checkpoint
-    - [X] Training (dataset .txt, ma solo 25%) andato a buon fine [Davide] - da aspettare che marco prepari i files .txt (?)
-      - [X] Ottenuti i checkpoint Definitivi!
-    - [X] Possibile sia necessario un cambio di formato checkpoint --> from pth to pt (compatibilità con objdet)
-
-- [X] Pretraing di DenseCL [Daniele]
-  - [X] Farlo partire in locale su Sunrdgd
-  - [X] Farlo partire in locale su Kaist
-  - [X] Farlo partire su Karolina su Kaist
-  - [X] KAIST
-    - [X] Modalitá 1
-    - [X] Modalitá 2
-- [X] Integrazione DenseCL e DeCur [Daniele]
-  - [X] Farlo partire in locale su Sunrgbd
-  - [X] Farlo partire in locale su Kaist
-  - [X] Farlo partire su Karolina su Kaist
-     
-- [X] Aspetti da considerare prima del pre-training
-  - [X] definire augmentations usate per KAIST
-  - [X] trovare dimensione comune embedding DeCUR
+  - [X] KAIST su Karolina [Davide]
+      - [ ] Completa training di 150 epoche e parla con Carlo [Davide] - Ottieni i checkpoint definitivi
   
-- [ ] far partire pre-training
+- [ ] Far partire pre-training
   - [ ] DenseCL
-  - [ ] DeCUR
+  - [X] DeCUR [Davide]
   - [ ] DenseDeCUR
 
-#### Evoluzione
+#### Conversione checkpoint
+to write...
 
-- [ ] Implementare modello multimodale (Carlo deve consigliare) [Marco]
+#### ICAFUSION
+
+- [X] Implementare modello multimodale ICAfusion [Marco]
   - [ ] setup della repo in locale [Marco]
   - [X] Setup della repo su karolina [Davide]
 
-  - [X] Portare a termine trainig parziale (set parziale di label - no pesi nostri)
-    - [X] Start training con i pesi forniti   
-    - [X] Traduzione parziale labels from xml to txt format
-    - [X] Training completo senza errori 
+  - [ ] controlla score_thr per visualizzazione
 
-  - [ ] Portare a termine trainig completo (set completo di label - pesi nostri)
-    - [ ] Tastare ICafusion con i files .txt --> Alla fine ho fatto in un altro modo
-    - [X] FORSE: modificare come salva i pesi decur
-    - [X] Adattamento nomi layer della rete per compatibilità coi nostri pesi pretrainati (Carlo(?)) [Davide]
-    - [X] Traduzione di tutte le label kaist  
-    - [X] Start training con i pesi da DeCUR
+  - [ ] Training da fare:
+    - [ ] No pretrained weights:
+      - [ ] 1 epoca - confronta metriche e loss con i pretrain [Davide]
+      - [ ] full epoche - da definire il numero (20-40)
+    - [ ] Pretrain weights (da decur)
+      - [ ] 1 epoca - confronta metriche e loss con i no pretrain [Davide]
+      - [ ] full epoche - da definire il numero (20-40)
+    - [ ] Pretrain weights (da dendedecur)
+      - [ ] 1 epoca - confronta metriche e loss con i no pretrain
+      - [ ] full epoche - da definire il numero
+
 
 
 #### Messaggio 
@@ -94,3 +68,9 @@ kaist/
     labels/ # qui sono da mettere le label
         train/
         test/
+
+
+
+
+
+
