@@ -104,7 +104,7 @@ def test(data,
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
     coco91class = coco80_to_coco91_class()
     if nc == 1:
-        s = ('%20s' + '%12s' * 10) % ('Class', 'Images', 'Labels', 'TP', 'FP', 'FN', 'F1', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')  # 设置进度条的显示信息
+        s = ('%20s' + '%12s' * 10) % ('Class', 'Images', 'Labels', 'TP', 'FP', 'FN', 'F1', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')  # 设置进度条的显示信息 = "Impostare le informazioni di visualizzazione della barra di avanzamento"
     else:
         s = ('%20s' + '%12s' * 7) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.75', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map75, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0, 0., 0.
@@ -130,9 +130,9 @@ def test(data,
 
             # Compute loss
             if compute_loss:
-                loss += compute_loss([x.float() for x in train_out], targets)[1][:4]  # box, obj, cls
+                loss += compute_loss([x.float() for x in train_out], targets)[1][:4]  # box, obj, cls, rank (?)
 
-            # Run NMS
+            # Run NMS = Non-Maximum Suppression
             targets[:, 2:] *= torch.Tensor([width, height, width, height]).to(device)  # to pixels
             lb = [targets[targets[:, 0] == i, 1:] for i in range(nb)] if save_hybrid else []  # for autolabelling
             t = time_synchronized()
@@ -238,10 +238,11 @@ def test(data,
         # os.rename('/home/shen/Chenyf/FLIR-align-3class/feature_save/fea_80x80.png', '/home/shen/Chenyf/FLIR-align-3class/feature_save/'+file_name+'_80x80'+'.png')
 
         # Plot images
-        if plots and batch_i < 3:
-            f1 = save_dir / f'test_batch{batch_i}_labels.jpg'  # labels
+        if plots and batch_i < 200:
+            os.makedirs(save_dir / 'test_result', exist_ok=True)
+            f1 = save_dir / 'test_result' / f'test_batch{batch_i}_labels.jpg'  # labels
             Thread(target=plot_images, args=(img_rgb, targets, paths, f1, names), daemon=True).start()
-            f2 = save_dir / f'test_batch{batch_i}_pred.jpg'  # predictions
+            f2 = save_dir / 'test_result' / f'test_batch{batch_i}_pred.jpg'  # predictions
             Thread(target=plot_images, args=(img_rgb, output_to_target(out), paths, f2, names), daemon=True).start()
 
     # 保存所有预测框结果，后续用于MR的计算
