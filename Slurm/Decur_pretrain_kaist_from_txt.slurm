@@ -48,12 +48,12 @@ python -u src/pretrain/pretrain_mm.py \
   --dataset KAIST \
   --method DeCUR \
   --data-root /scratch/project/eu-25-19/kaist-cvpr15/images \
-  --list-train /mnt/proj3/eu-25-19/davide_secco/ADL-Project/Kaist_txt_lists/Training_forSSL_pretraining_25.txt \
+  --list-train /mnt/proj3/eu-25-19/davide_secco/ADL-Project/Kaist_txt_lists/Training_split_25_forSSL.txt \
   --mode rgb thermal \
   --backbone resnet50 \
   --batch-size 128 \
   --workers 8 \
-  --epochs 15 \
+  --epochs 150 \
   --checkpoint-dir ./checkpoint/KAIST_Training_forSSL_pretraining_25 \
   --cos \
   --learning-rate-weights 0.002 \
