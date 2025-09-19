@@ -21,6 +21,10 @@ import collections
 import collections.abc
 collections.Iterable = collections.abc.Iterable
 
+# no warnings
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 from src.models.decur               import DeCUR
 from src.models.densecl             import DenseCL
@@ -28,71 +32,45 @@ from src.models.densedecur          import DenseDeCUR
 from src.dataio.kaist_dataset_list  import KAISTDatasetFromList
 from src.dataio.loader              import build_kaist_transforms
 
-# no warnings
-import warnings
-warnings.filterwarnings("ignore", category=UserWarning)
-warnings.filterwarnings("ignore", category=FutureWarning)
 
-
+# method
 parser = argparse.ArgumentParser(description='Multimodal Self-Supervised Pretraining')
 parser.add_argument('--dataset', type=str, choices=['KAIST'])  
-parser.add_argument('--method', type=str, choices=['DeCUR','DenseCL','DenseDeCUR'])   
+parser.add_argument('--method',  type=str, choices=['DeCUR','DenseCL','DenseDeCUR'])   
 parser.add_argument('--densecl_stream', type=str, default='rgb', choices=['rgb','thermal'])                  
 
-# parser.add_argument('--data1', type=str, metavar='DIR', help='path to dataset')
-# parser.add_argument('--data2', type=str, metavar='DIR', help='path to dataset')
-
+# training hyperparameters
 parser.add_argument('--workers', default=8, type=int)
 parser.add_argument('--epochs', default=1000, type=int)
 parser.add_argument('--batch-size', default=128, type=int)
 
+# optimizer hyperparameters
+parser.add_argument('--learning-rate-weights', default=0.002,   type=float)
+parser.add_argument('--learning-rate-biases',  default=0.00048, type=float)
 
-# decur training
-parser.add_argument('--learning-rate-weights', default=0.002, type=float)
-parser.add_argument('--learning-rate-biases', default=0.00048, type=float)
-parser.add_argument('--weight-decay', default=1e-4, type=float)
-parser.add_argument('--lambd', default=0.0051, type=float)
-parser.add_argument('--projector', default='8192-8192-8192', type=str)
-parser.add_argument('--lr', default=0.2, type=float)
+#parser.add_argument('--weight-decay', default=1e-4, type=float)
+parser.add_argument('--lr',  default=0.2, type=float)
 parser.add_argument('--cos', action='store_true', default=False)
 parser.add_argument('--schedule', default=[120,160], nargs='*', type=int)
-parser.add_argument('--dim_common', type=int, default=448)
 
+# decur hyperparameters
+parser.add_argument('--lambd', default=0.0051, type=float)
+parser.add_argument('--projector', default='8192-8192-8192', type=str)
+parser.add_argument('--dim_common', type=int, default=6144)
 
 # training settings
-parser.add_argument('--print-freq', default=100, type=int)
-parser.add_argument('--pretrained', type=str, default='',help='pretrained path.')
-parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path)
 parser.add_argument('--resume', type=str, default='',help='resume path.')
+parser.add_argument('--checkpoint-dir', default='./checkpoint/', type=Path)
+parser.add_argument('--print-freq', default=20, type=int)
 
+# dataset
+parser.add_argument('--data-root',  type=str, default='/scratch/project/eu-25-19/kaist-cvpr15/images')  
+parser.add_argument('--list-train', type=str, default='/mnt/proj3/eu-25-19/davide_secco/ADL-Project/Kaist_txt_lists/Training_split_25_forSSL.txt')
 
-
-# parser.add_argument('--mode', nargs='*', default=['s1','s2c'], help='bands to process')
-parser.add_argument('--train_frac', type=float, default=1.0)
-# parser.add_argument('--backbone', type=str, default='resnet50')
-
-
-
-parser.add_argument('--data-root', type=str, default='~/ADL-Project/kaist-cvpr15/images',
-                    help='root del dataset KAIST (cartella che contiene setxx/Vyyy/{visible,lwir})')  
-parser.add_argument('--list-train', type=str, required=False,
-                    help='file txt con la lista per il training (relative paths)')
-parser.add_argument('--list-test', type=str, required=False,
-                    help='file txt con la lista per il test/val (relative paths)')
-
-# parser.add_argument('--ext-vis', type=str, default='.jpg', help='estensione immagini visibili (default .jpg)')
-# parser.add_argument('--ext-lwir', type=str, default='.jpg', help='estensione immagini lwir (default .jpg)')
-
-
-
-
-#########################
-#### dist parameters ###
-#########################
+# dist training
 parser.add_argument("--dist_url", default="env://", type=str)
 parser.add_argument("--world_size", default=-1, type=int, help='set automatically')
 parser.add_argument("--rank", default=0, type=int, help='set automatically')
-# parser.add_argument("--local_rank", default=0, type=int, help="this argument is not used and should be ignored")
 parser.add_argument('--seed', type=int, default=42)
 
 
@@ -119,8 +97,7 @@ def init_distributed_mode(args):
         backend=backend,
         init_method=args.dist_url,
         world_size=args.world_size,
-        rank=args.rank,
-    )
+        rank=args.rank)
 
     if torch.cuda.is_available():
         gpu_count = torch.cuda.device_count()
@@ -199,21 +176,21 @@ def main_worker(gpu, args):
 
     # select optmizer
     if args.method == 'DeCUR':
-        optimizer = LARS(parameters, lr=0, weight_decay=args.weight_decay,
-                        weight_decay_filter=True,
-                        lars_adaptation_filter=True)
-    elif args.method == 'DenseCL':
-        optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                            momentum=0.9,
-                            weight_decay=1e-4)
-    elif args.method == 'DenseDeCUR':
-        optimizer = LARS(parameters, lr=0, weight_decay=args.weight_decay,
-                weight_decay_filter=True,
-                lars_adaptation_filter=True)
-        # optimizer = torch.optim.SGD(model.parameters(), args.lr,
-        #                    momentum=0.9,
-        #                    weight_decay=1e-4)
+        args.lr = 0
+        optimizer = LARS(parameters, lr=args.lr, weight_decay=1e-4, weight_decay_filter=True, lars_adaptation_filter=True)
     
+    
+    elif args.method == 'DenseCL':
+        args.lr = 0.015 # se batch size = 128
+        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    
+    
+    elif args.method == 'DenseDeCUR':
+        optimizer = LARS(parameters, lr=0, weight_decay=1e-4, weight_decay_filter=True, lars_adaptation_filter=True)
+        # optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=0.9, weight_decay=1e-4)
+
+
+
 
     # automatically resume from checkpoint if it exists
     if args.resume:
@@ -224,6 +201,7 @@ def main_worker(gpu, args):
     else:
         start_epoch = 0    
     
+
     # dataset
     rgb_t, th_t = build_kaist_transforms(img_size=224)
 
@@ -233,7 +211,6 @@ def main_worker(gpu, args):
             list_file=args.list_train,
             rgb_transform=rgb_t,
             th_transform=th_t)
-            # tolto mode = args.mode, ext_vis, ext_lwir
 
     train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
 
@@ -246,10 +223,9 @@ def main_worker(gpu, args):
         sampler=train_sampler, 
         drop_last=True)
 
-    print(f"[DEBUG] train_loader has {len(train_loader)} batches")
-    print(f'[INFO] Start training')
-    print(f"[INFO] Training method: {args.method}" + (f", DenseCL stream: {args.densecl_stream}" if args.method == 'DenseCL' else ""))
 
+    print(f"[INFO] Training method: {args.method}" + (f", DenseCL stream: {args.densecl_stream}" if args.method == 'DenseCL' else ""))
+    
     start_time = time.time()
     scaler = torch.cuda.amp.GradScaler()
     
@@ -271,19 +247,24 @@ def main_worker(gpu, args):
             optimizer.zero_grad()
             
             with torch.cuda.amp.autocast():
-                if args.method=='DenseDeCUR':
+                
+                if args.method=='DeCUR': # ok 100%
                     loss1,loss2,loss12,on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
                     loss = (loss1 + loss2 + loss12) / 3
-                elif args.method=='DeCUR':
-                    loss1,loss2,loss12,on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
-                    loss = (loss1 + loss2 + loss12) / 3
-                elif args.method=='DenseCL':
+
+                elif args.method=='DenseCL': # ok 100%
                     if args.densecl_stream == 'rgb':
                         im_q, im_k = y1_1, y1_2  # RGB
                     elif args.densecl_stream == 'thermal':
                         im_q, im_k = y2_1, y2_2  # Thermal
-                    loss1, loss2, _ = model.forward(im_q, im_k) 
-                    loss = loss1 + loss2
+                    loss_global, loss_dense, _ = model.forward(im_q, im_k) 
+                    loss = loss_global + loss_dense 
+
+
+
+                if args.method=='DenseDeCUR':
+                    loss1,loss2,loss12,on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
+                    loss = (loss1 + loss2 + loss12) / 3
 
 
             scaler.scale(loss).backward()
@@ -293,42 +274,68 @@ def main_worker(gpu, args):
             
             if step % args.print_freq == 0:
                 if args.rank == 0:
-                    stats = dict(epoch=epoch, step=step,
-                                 #lr_weights=optimizer.param_groups[0]['lr'],
-                                 #lr_biases=optimizer.param_groups[1]['lr'],
-                                 #lr=optimizer.param_groups['lr'],
-                                 loss=loss.item(),
-                                 loss1=loss1.item(),
-                                 loss2=loss2.item(),
-                                 # loss12=loss12.item(),
-                                 #on_diag12_c=on_diag12_c.item(),
-                                 time=int(time.time() - start_time))
-                    print(json.dumps(stats), flush=True)
-                    print(json.dumps(stats), file=stats_file, flush=True)
-    
-        # Salvo ogni 100 epoche oppure all'ultima
-        if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
-            # save checkpoint
-            state = dict(epoch=epoch + 1, model=model.state_dict(),
-                         optimizer=optimizer.state_dict())
-            torch.save(state, args.checkpoint_dir / 'checkpoint_{:04d}.pth'.format(epoch))
 
+                    if args.method=='DeCUR':
+                        stats = dict(epoch=epoch, step=step, loss=loss.item(), loss1=loss1.item(), loss2=loss2.item(), loss12=loss12.item(), on_diag12_c=on_diag12_c.item())
+                    elif args.method=='DenseCL':
+                        stats = dict(epoch=epoch, step=step, loss=loss.item(), loss_global=loss_global.item(), loss_dense=loss_dense.item())
+                    elif args.method=='DenseDeCUR':
+                        stats = dict(epoch=epoch, step=step, loss=loss.item(), loss1=loss1.item(), loss2=loss2.item(), loss12=loss12.item(), on_diag12_c=on_diag12_c.item())
+                    
+
+
+                    if step == 0 and epoch == 0 and args.rank == 0:
+                        header = " ".join(f"{k:<12}" for k in stats.keys())
+                        print(header, flush=True)
+                        print(header, file=stats_file, flush=True)
+
+                    line = " ".join(f"{v:<12.6f}" if isinstance(v, float) else f"{v:<12}" for v in stats.values())
+                    print(line, flush=True)
+                    print(line, file=stats_file, flush=True)
+
+                    
+            
+        
+        # save checkpoint
+        if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
+            state = dict(epoch=epoch + 1, model=model.state_dict(), optimizer=optimizer.state_dict())
+            torch.save(state, args.checkpoint_dir / 'decur_checkpoint_{:04d}.pth'.format(epoch))
             tb_writer.add_scalars('training log',stats,epoch)
  
             
 
 def adjust_learning_rate(args, optimizer, epoch):
+
+    is_lars = (optimizer.__class__.__name__ == 'LARS')
     lr = args.lr
-    w = 1
-    if args.cos:
-        w *= 0.5 * (1. + math.cos(math.pi * epoch / args.epochs))
-    else:
-        for milestone in args.schedule:
-            w *= 0.1 if epoch >= milestone else 1.
-    optimizer.param_groups[0]['lr'] = w * args.learning_rate_weights
-    
-    if optimizer.__class__.__name__ == 'LARS':
+    w = 1.0
+
+    if is_lars:
+        if args.cos:
+            w *= 0.5 * (1. + math.cos(math.pi * epoch / args.epochs))
+        else:
+            for milestone in args.schedule:
+                w *= 0.1 if epoch >= milestone else 1.
+        optimizer.param_groups[0]['lr'] = w * args.learning_rate_weights
         optimizer.param_groups[1]['lr'] = w * args.learning_rate_biases 
+    else:
+        warmup_epochs   = 10
+        warmup_start_lr = 0.0
+
+        if epoch < warmup_epochs: # linear warm-up
+            lr_t = warmup_start_lr + (lr - warmup_start_lr) * (epoch + 1) / warmup_epochs
+        else:
+            if args.cos:
+                t = (epoch - warmup_epochs) / max(1, args.epochs - warmup_epochs)
+                lr_t = lr * (0.5 * (1. + math.cos(math.pi * t)))
+            else:
+                for milestone in args.schedule:
+                    w *= 0.1 if epoch >= milestone else 1.0
+                lr_t = lr * w
+            
+        for g in optimizer.param_groups:
+                g['lr'] = lr_t
+
 
      
 

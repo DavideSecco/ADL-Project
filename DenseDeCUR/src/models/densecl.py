@@ -36,16 +36,19 @@ class DenseCL(nn.Module):
         self.register_buffer("queue", torch.randn(feat_dim, queue_len))
         self.queue = nn.functional.normalize(self.queue, dim=0)
         self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
+        
         # create the second queue for dense output
         self.register_buffer("queue2", torch.randn(feat_dim, queue_len))
         self.queue2 = nn.functional.normalize(self.queue2, dim=0)
         self.register_buffer("queue2_ptr", torch.zeros(1, dtype=torch.long))
 
     def init_weights(self, pretrained=False):
-        if pretrained is not None:
-            print('[INFO]: loading model from pretrained weights')
+        # if pretrained is not None:
+            # print('[INFO]: loading model from pretrained weights')
+
         self.encoder_q[0].init_weights(pretrained=pretrained)
         self.encoder_q[1].init_weights(init_linear='kaiming')
+
         # copia i parametri di encoder_q in encoder_k
         for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
             param_k.data.copy_(param_q.data)
@@ -194,7 +197,7 @@ class DenseCL(nn.Module):
         l_neg_dense = torch.einsum('nc,ck->nk', [q_grid, self.queue2.clone().detach()])
 
         loss_single = self.head(l_pos, l_neg)['loss_contra']
-        loss_dense =  self.head(l_pos_dense, l_neg_dense)['loss_contra']
+        loss_dense  =  self.head(l_pos_dense, l_neg_dense)['loss_contra']
 
         #losses = dict()
         #losses['loss_contra_single'] = loss_single * (1 - self.loss_lambda)
@@ -205,8 +208,6 @@ class DenseCL(nn.Module):
 
         self._dequeue_and_enqueue(k)
         self._dequeue_and_enqueue2(k2)
-
-        #return losses 
         
         return loss_contra_single, loss_contra_dense, q2
 

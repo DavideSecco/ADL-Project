@@ -5,8 +5,8 @@
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --time=12:00:00
-#SBATCH --output=logs/pretrain_decur.out
-#SBATCH --error=logs/pretrain_decur.err
+#SBATCH --output=logs/pretrain_densecl.out
+#SBATCH --error=logs/pretrain_densecl.err
 
 
 echo "Starting"
@@ -29,12 +29,13 @@ export CUDA_LAUNCH_BLOCKING=1
 
 python /mnt/proj3/eu-25-19/davide_secco/ADL-Project/DenseDeCUR/main.py \
   --dataset KAIST \
-  --method DeCUR \
-  --densecl_stream thermal \
+  --method DenseCL \
+  --densecl_stream rgb \
   --batch-size 128 \
   --epochs 200 \
   --print-freq 20 \
-  --dim_common 6144
+  --dim_common 96
+
 
 
   echo "Ending"

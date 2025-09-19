@@ -221,7 +221,7 @@ class ResNet(nn.Module):
                 raise ValueError(f"Nessuna URL per arch '{arch}' in model_urls")
             state_dict = load_state_dict_from_url(url, progress=True, map_location="cpu")
             self.load_state_dict(state_dict, strict=False)
-            print(f"[{arch}] pretrained weights loaded from {url}")
+            # print(f"[{arch}] pretrained weights loaded from {url}")
 
 
         elif pretrained is None:
@@ -253,5 +253,4 @@ def resnet50(pretrained=False, progress=True, **kwargs):
         pretrained (bool): If True, returns a model pre-trained on ImageNet
         progress (bool): If True, displays a progress bar of the download to stderr
     """
-    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress,
-                   **kwargs)
+    return _resnet('resnet50', Bottleneck, [3, 4, 6, 3], pretrained, progress, **kwargs)

@@ -93,7 +93,7 @@ class KAISTDatasetFromList(Dataset):
                 f"Nessuna coppia valida in {list_file} rispetto a {self.data_root}"
             )
         
-        print(f"[KAISTDatasetFromList] Trovate {len(pairs)} coppie valide dal file {list_file}")
+        # print(f"[KAISTDatasetFromList] Trovate {len(pairs)} coppie valide dal file {list_file}")
         self.pairs = pairs
 
     def __len__(self):
