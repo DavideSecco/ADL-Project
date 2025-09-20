@@ -1,4 +1,4 @@
-## installazione denseCL
+## Preparazione env x denseCL
 per prima cosa, creare ambiente virtuale con conda ed attivarlo:
 ```bash
 conda create -n densecl python=3.7 -y

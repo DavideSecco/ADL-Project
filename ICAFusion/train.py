@@ -90,38 +90,50 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
     #pretrained = False
     if pretrained:
         print("Loading pretrained model...", flush=True)
+        # Load checkpoint
         with torch_distributed_zero_first(rank):
             attempt_download(weights)  # download if not found locally
+
         ckpt = torch.load(weights, map_location=device, weights_only=False)  # load checkpoint
+
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+
         exclude = ['anchor'] if (opt.cfg or hyp.get('anchors')) and not opt.resume else []  # exclude keys
         
+
         # Se continui ad avere problemi con optimizer salvati tutto
         # torch.save(ckpt, "whole_ckpt.pth")
-
         # Salvo State_dict ma solo la parte di model, escludo il resto
         # state_dict = ckpt['model'].float().state_dict()  # to FP32
-        state_dict = ckpt['model']         # Mio test
-        torch.save(state_dict, "icafusion_state_dict_from_ckpt_loaded.pth")            # Necessario se vuol capire che cosa hai caricato
-        torch.save(model.state_dict(), "icafusion_state_dict_from_Model.pth")   # Per capire cosa si aspetta il modelo
 
-        print(f"state_dict keys[:10]: {list(state_dict.keys())[:10]}", flush=True)
-        print(f"model.state_dict()[:10] keys: {list(model.state_dict().keys())[:10]}", flush=True)
-        print(f"exclude keys: {exclude}", flush=True)
+
+        state_dict = ckpt['model']         # Mio test
+
+        # torch.save(state_dict, "icafusion_state_dict_from_ckpt_loaded.pth")            # Necessario se vuol capire che cosa hai caricato
+        # torch.save(model.state_dict(), "icafusion_state_dict_from_Model.pth")   # Per capire cosa si aspetta il modelo
+
+        # print(f"state_dict keys[:10]: {list(state_dict.keys())[:10]}", flush=True)
+        # print(f"model.state_dict()[:10] keys: {list(model.state_dict().keys())[:10]}", flush=True)
+        # print(f"exclude keys: {exclude}", flush=True)
         
         state_dict = intersect_dicts(state_dict, model.state_dict(), exclude=exclude)  # intersect
-        print(f"state_dict keys[:10] (after intersect_dicts): {list(state_dict.keys())[:10]}", flush=True)
-        print(f"len(state_dict) (after intersect_dicts): {len(state_dict)}", flush=True)
+
+        # print(f"state_dict keys[:10] (after intersect_dicts): {list(state_dict.keys())[:10]}", flush=True)
+        # print(f"len(state_dict) (after intersect_dicts): {len(state_dict)}", flush=True)
         
         new_state_dict = state_dict
         for key in list(state_dict.keys()):
             new_state_dict[key[:6] + str(int(key[6])+10) + key[7:]] = state_dict[key]
 
-        print(f"new_state_dict keys[:10]: {list(new_state_dict.keys())[:10]}", flush=True)
+        # print(f"new_state_dict keys[:10]: {list(new_state_dict.keys())[:10]}", flush=True)
         model.load_state_dict(new_state_dict, strict=False)  # load
 
-        print(f"model.state_dict() keys[:10] (after load_state_dict): {list(model.state_dict().keys())[:10]}", flush=True)
-        print(f"len state_dict: {len(model.state_dict())}", flush=True)
+        # Verifica i pesi caricati confrontandoli con quelli che si aspettano
+        torch.save(model.state_dict(), "icafusion_state_dict_AFTER_LOAD.pth")
+
+
+        # print(f"model.state_dict() keys[:10] (after load_state_dict): {list(model.state_dict().keys())[:10]}", flush=True)
+        # print(f"len state_dict: {len(model.state_dict())}", flush=True)
 
         logger.info('Transferred %g/%g items from %s' % (len(state_dict), len(model.state_dict()), weights))  # report
     else:
@@ -489,6 +501,15 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                 torch.save(ckpt, last)
                 if best_fitness == fi:
                     torch.save(ckpt, best)
+                
+                  # --- AGGIUNTA: salva SOLO lo state_dict, portabile e pronto per transfer learning
+                state_dict = (model.module if is_parallel(model) else model).state_dict()
+                torch.save(state_dict, last.parent / 'model_state_dict_only.pth')      # attenzione e' direttamente il model state dict! Non esistera' quindi una chiave "model"
+                if best_fitness == fi:
+                    torch.save(state_dict, last.parent / 'best_model_state_dict_only.pth')
+                # --- FINE AGGIUNTA
+
+
                 if wandb_logger.wandb:
                     if ((epoch + 1) % opt.save_period == 0 and not final_epoch) and opt.save_period != -1:
                         wandb_logger.log_model(
