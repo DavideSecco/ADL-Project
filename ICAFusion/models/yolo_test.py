@@ -133,6 +133,11 @@ class Model(nn.Module):
             return self.forward_once(x, x2, profile)  # single-scale inference, train
 
 
+
+    # All’inizio (tipicamente per i primi moduli, cioè self.model fino ai precedenti a f == -4) processi solo l’input x (= visible = RGB).
+    # Quindi i blocchi model.0–model.4 lavorano sul dominio visible.
+    # Quando incontri un modulo il cui .f == -4, invece processi x2 (infrared), quindi i blocchi model.5–model.9 sono sul dominio IR.
+    
     def forward_once(self, x, x2, profile=False):
         y, dt = [], []  # outputs
         i = 0
