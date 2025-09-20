@@ -41,5 +41,6 @@ __pycache__/
 ICAFusion/runs/*
 ICAFusion/yolov5l.pt
 ICAFusion/wandb/*
+ICAFusion/final_checkpoints/*
 
 
