@@ -489,6 +489,15 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                 torch.save(ckpt, last)
                 if best_fitness == fi:
                     torch.save(ckpt, best)
+                
+                  # --- AGGIUNTA: salva SOLO lo state_dict, portabile e pronto per transfer learning
+                state_dict = (model.module if is_parallel(model) else model).state_dict()
+                torch.save(state_dict, last.parent / 'model_state_dict_only.pth')      # attenzione e' direttamente il model state dict! Non esistera' quindi una chiave "model"
+                if best_fitness == fi:
+                    torch.save(state_dict, last.parent / 'best_model_state_dict_only.pth')
+                # --- FINE AGGIUNTA
+
+
                 if wandb_logger.wandb:
                     if ((epoch + 1) % opt.save_period == 0 and not final_epoch) and opt.save_period != -1:
                         wandb_logger.log_model(
