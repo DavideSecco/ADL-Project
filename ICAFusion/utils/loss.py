@@ -404,7 +404,10 @@ class ComputeLoss:
         bs = tobj.shape[0]  # batch size
 
         loss = lbox + lobj + lcls + lrk
-        return loss * bs, torch.cat((lbox, lobj, lcls, lrk)).detach()
+        
+        loss_items = torch.cat((lbox, lobj, lcls, lrk)).detach()
+        # loss_items = torch.cat((lbox*bs, lobj*bs, lcls*bs, lrk*bs)).detach() # Versione alternativa (ma per come è pensata al momento la visualizzazione non va bene)
+        return loss * bs, loss_items, bs
 
     def build_targets(self, p, targets):
         # Build targets for compute_loss(), input targets(image,class,x,y,w,h)
