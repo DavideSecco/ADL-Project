@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import yaml
 from tqdm import tqdm
+import time
 
 from models.experimental import attempt_load
 from utils.datasets import create_dataloader_rgb_ir
@@ -18,7 +19,6 @@ from utils.plots import plot_images, output_to_target, plot_study_txt
 from utils.torch_utils import select_device, time_synchronized
 from evaluation_script.evaluation_script import evaluate
 from utils.confluence import confluence_process
-
 
 def test(data,
          weights=None,
@@ -99,6 +99,11 @@ def test(data,
         val_path_ir = data['val_ir']
         dataloader = create_dataloader_rgb_ir(val_path_rgb, val_path_ir, imgsz, batch_size, gs, opt, pad=0.5, rect=True, prefix=colorstr(f'{task}: '))[0]
 
+    # dopo la create_dataloader_rgb_ir(...)
+    print(f" [CHK] dataloader.batch_size = {getattr(dataloader, 'batch_size', None)}")
+    print(f" [CHK] len(dataset) = {len(dataloader.dataset)}")
+    print(f" [CHK] len(dataloader) = {len(dataloader)}  # (numero di batch)")
+
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
@@ -112,10 +117,17 @@ def test(data,
     loss = torch.zeros(4, device=device)
     jdict, stats, ap, ap_class, wandb_images = [], [], [], [], []
 
-    for batch_i, (img, targets, paths, shapes) in enumerate(tqdm(dataloader, desc=s)):
+    # create progress bar object so we can update its postfix (memory info) each iteration
+    pbar = tqdm(dataloader, desc=s)
+
+    for batch_i, (img, targets, paths, shapes) in enumerate(pbar):
+        mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
+
+        # Operazioni sulle immagini
         img = img.to(device, non_blocking=True)
         img = img.half() if half else img.float()  # uint8 to fp16/32
         img /= 255.0  # 0 - 255 to 0.0 - 1.0
+        
         targets = targets.to(device)
         nb, _, height, width = img.shape  # batch size, channels, height, width
 
@@ -141,14 +153,20 @@ def test(data,
             t1 += time_synchronized() - t
 
         # Statistics per image
+        # si = sample_index
+        # Ciclo sul batch: 0 ... batch_size-1 (= nb-1)c
         for si, pred in enumerate(out):
+            # Estrae le etichette (target) relative all'immagine 'si' dal tensore "targets"
             labels = targets[targets[:, 0] == si, 1:]
             nl = len(labels)
             tcls = labels[:, 0].tolist() if nl else []  # target class
-            path = Path(paths[si])
-            seen += 1
 
+            path = Path(paths[si])      # path del file immagine
+            seen += 1                   # contatore globale immagini viste
+
+            # # Se non ci sono predizioni per questa immagine
             if len(pred) == 0:
+                # # ...ma ci sono GT, aggiunge un placeholder vuoto per le metriche
                 if nl:
                     stats.append((torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls))
                 continue
@@ -156,8 +174,17 @@ def test(data,
             # Predictions
             if single_cls:
                 pred[:, 5] = 0
+
+            # Copia le predizioni per operare in "native space" (Formato tipico di 'pred'/'predn': [N, 6] = [x1, y1, x2, y2, conf, cls])
             predn = pred.clone()
+
+             # Rimappa i box dal sistema di coordinate del tensor (post letterbox/resize)
+            # allo spazio "nativo" dell'immagine originale usando (img shape, gain, pad) in 'shapes'
+            # img[si].shape[1:] = (h, w) del tensor; shapes[si][0] / shapes[si][1] contengono info di resize/padding
             scale_coords(img[si].shape[1:], predn[:, :4], shapes[si][0], shapes[si][1])  # native-space pred
+
+            torch.cuda.synchronize()
+            t_txt_start = time.time()
 
             # Append to text file
             if save_txt:
@@ -168,6 +195,10 @@ def test(data,
                     line = (i+1, *xywh, conf) if save_conf else (i+1, *xywh)  # label format
                     with open(labels_dir / (path.stem + '.txt'), 'a') as f:
                         f.write(('%g,' * len(line)).rstrip(",") % line + '\n')
+
+            torch.cuda.synchronize()  # <-- di nuovo per chiudere eventuali sync
+            t_txt_end = time.time()
+            print(f"[SAVE_TXT] Iter {batch_i} ha impiegato: {(t_txt_end - t_txt_start)*1000:.2f} ms", flush=True)
 
             # W&B logging - Media Panel Plots
             if len(wandb_images) < log_imgs and wandb_logger.current_epoch > 0:  # Check for test operation
@@ -245,7 +276,7 @@ def test(data,
             f2 = save_dir / 'test_result' / f'test_batch{batch_i}_pred.jpg'  # predictions
             Thread(target=plot_images, args=(img_rgb, output_to_target(out), paths, f2, names), daemon=True).start()
 
-    # 保存所有预测框结果，后续用于MR的计算
+    # 保存所有预测框结果，后续用于MR的计算 = Salvare tutti i risultati dei bounding box predetti, da utilizzare successivamente per il calcolo del MR.
     if save_txt:
         temp = []
         files = os.listdir(labels_dir)
@@ -303,7 +334,17 @@ def test(data,
         logger.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map75, map))
     else:
         pf = '%20s' + '%12i' * 2 + '%12.4g' * 8  # print format
-        logger.info(pf % ('all', seen, nt.sum(), tp, fp, fn, f1, mp, mr, map50, map))
+        logger.info(pf % ('all',
+                          int(seen),
+                          int(np.sum(nt)),
+                          int(tp) if hasattr(tp, '__int__') else int(np.array(tp)),
+                          int(fp) if hasattr(fp, '__int__') else int(np.array(fp)),
+                          int(fn) if hasattr(fn, '__int__') else int(np.array(fn)),
+                          float(f1),
+                          float(mp),
+                          float(mr),
+                          float(map50),
+                          float(map)))
     logger.info(('%20s' + '%11s' * 9) % ('MR-all', 'MR-day', 'MR-night', 'MR-near', 'MR-medium', 'MR-far', 'MR-none', 'MR-partial', 'MR-heavy', 'Recall-all'))
     logger.info(('%20.2f' + '%11.2f' * 9) % (MR_all * 100, MR_day * 100, MR_night * 100, MR_near * 100, MR_medium * 100, MR_far * 100, MR_none * 100, MR_partial * 100, MR_heavy * 100, recall_all * 100))
 
