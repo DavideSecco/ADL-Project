@@ -20,6 +20,34 @@ from utils.torch_utils import select_device, time_synchronized
 from evaluation_script.evaluation_script import evaluate
 from utils.confluence import confluence_process
 
+from threading import Thread
+from queue import Queue
+import io
+
+write_q = Queue(maxsize=10000)
+stop_token = object()
+
+def writer_thread():
+    # cache file handles per evitare open/close ripetuti
+    fh_cache = {}
+    while True:
+        item = write_q.get()
+        if item is stop_token:
+            break
+        file_path, lines = item
+        fh = fh_cache.get(file_path)
+        if fh is None:
+            fh = open(file_path, 'a', buffering=1<<20)  # 1MB buffer
+            fh_cache[file_path] = fh
+        fh.write(lines)  # unica write per batch di righe
+    # chiudi tutto
+    for fh in fh_cache.values():
+        fh.close()
+
+# def save_predictions_to_txt(path, line):
+#     with open(path, 'a') as f:
+#         f.write(('%g,' * len(line)).rstrip(",") % line + '\n')
+
 def test(data,
          weights=None,
          batch_size=32,
@@ -119,7 +147,13 @@ def test(data,
 
     # create progress bar object so we can update its postfix (memory info) each iteration
     pbar = tqdm(dataloader, desc=s)
+    
+    t_end_no_grad, t_txt_end, t_txt_end_2, t_txt_end_3 = 0.0, 0.0, 0.0, 0.0
+    # t_start_batch = time_synchronized()
 
+    t_writer = Thread(target=writer_thread, daemon=True)
+    t_writer.start()
+    
     for batch_i, (img, targets, paths, shapes) in enumerate(pbar):
         mem = '%.3gG' % (torch.cuda.memory_reserved() / 1E9 if torch.cuda.is_available() else 0)  # (GB)
 
@@ -133,7 +167,8 @@ def test(data,
 
         img_rgb = img[:, :3, :, :]
         img_ir = img[:, 3:, :, :]
-
+        
+        # t_start_no_grad = time_synchronized()
         with torch.no_grad():
             # Run model
             t = time_synchronized()
@@ -151,6 +186,8 @@ def test(data,
             out = non_max_suppression(out, conf_thres, iou_thres, labels=lb, multi_label=True, agnostic=single_cls)
             # out = confluence_process(out, 0.1, 0.5)
             t1 += time_synchronized() - t
+
+        # t_end_no_grad += time_synchronized() - t_start_no_grad
 
         # Statistics per image
         # si = sample_index
@@ -183,22 +220,38 @@ def test(data,
             # img[si].shape[1:] = (h, w) del tensor; shapes[si][0] / shapes[si][1] contengono info di resize/padding
             scale_coords(img[si].shape[1:], predn[:, :4], shapes[si][0], shapes[si][1])  # native-space pred
 
-            torch.cuda.synchronize()
-            t_txt_start = time.time()
+            stem2idx = {Path(n).stem: k for k, n in enumerate(labels_list)}
+            
+            # t_txt_start = time_synchronized()
+            # t_txt_start_2 = time_synchronized()
 
-            # Append to text file
             if save_txt:
-                i = labels_list.index(str(path.stem) + '.txt')
-                gn = torch.tensor(shapes[si][0])[[1, 0, 1, 0]]  # normalization gain whwh
-                for *xyxy, conf, cls in predn.tolist():
-                    xywh = (xyxy2xywh2(torch.tensor(xyxy).view(1, 4))).view(-1).tolist()  # normalized xywh
-                    line = (i+1, *xywh, conf) if save_conf else (i+1, *xywh)  # label format
-                    with open(labels_dir / (path.stem + '.txt'), 'a') as f:
-                        f.write(('%g,' * len(line)).rstrip(",") % line + '\n')
+                # evita sincronizzazioni globali: porta su CPU solo quello che ti serve
+                p_cpu = predn.detach().to('cpu')  # evita .numpy() qui; restiamo in torch
+                lines_io = io.StringIO()
+                idx = stem2idx[path.stem]  # vedi sezione 3)
+                # idx = labels_list.index(str(path.stem) + '.txt')
+                for *xyxy, conf, cls in p_cpu.tolist():
+                    # t_txt_start_3 = time_synchronized()
+                    xywh = (xyxy2xywh2(torch.tensor(xyxy).view(1,4))).view(-1).tolist()
+                    # t_txt_end_3 += time_synchronized() - t_txt_start_3
+                    if save_conf:
+                        line = (idx+1, *xywh, conf)
+                    else:
+                        line = (idx+1, *xywh)
+                    # 👇 conversione sicura a tuple di float
+                    # print(f" [CHK] line = {line}", flush=True)
+                    line = tuple(float(v) for v in line)
+                    lines_io.write(','.join(f'{v:g}' for v in line) + '\n')
 
-            torch.cuda.synchronize()  # <-- di nuovo per chiudere eventuali sync
-            t_txt_end = time.time()
-            print(f"[SAVE_TXT] Iter {batch_i} ha impiegato: {(t_txt_end - t_txt_start)*1000:.2f} ms", flush=True)
+                # t_txt_start_2 = time_synchronized()
+
+                s = lines_io.getvalue()
+                if s:
+                    write_q.put((str(labels_dir / (path.stem + '.txt')), s))
+
+            # t_txt_end += time_synchronized() - t_txt_start
+            # t_txt_end_2 += time_synchronized() - t_txt_start_2
 
             # W&B logging - Media Panel Plots
             if len(wandb_images) < log_imgs and wandb_logger.current_epoch > 0:  # Check for test operation
@@ -268,13 +321,27 @@ def test(data,
         # os.rename('/home/shen/Chenyf/FLIR-align-3class/feature_save/fea_40x40.png', '/home/shen/Chenyf/FLIR-align-3class/feature_save/'+file_name+'_40x40'+'.png')
         # os.rename('/home/shen/Chenyf/FLIR-align-3class/feature_save/fea_80x80.png', '/home/shen/Chenyf/FLIR-align-3class/feature_save/'+file_name+'_80x80'+'.png')
 
+        if save_txt:
+            write_q.put(stop_token)
+            t_writer.join()
+
         # Plot images
-        if plots and batch_i < 200:
+        if plots and batch_i < 10:
             os.makedirs(save_dir / 'test_result', exist_ok=True)
             f1 = save_dir / 'test_result' / f'test_batch{batch_i}_labels.jpg'  # labels
             Thread(target=plot_images, args=(img_rgb, targets, paths, f1, names), daemon=True).start()
             f2 = save_dir / 'test_result' / f'test_batch{batch_i}_pred.jpg'  # predictions
             Thread(target=plot_images, args=(img_rgb, output_to_target(out), paths, f2, names), daemon=True).start()
+
+    
+    # t_end_batch = time_synchronized()
+    
+    # print(f"[INFO] Tutti i batch hanno impiegato: {(t_end_batch - t_start_batch):.2f} s", flush=True)
+    # print(f"[INFO] Tempo totale senza gradiente: {t_end_no_grad:.2f} s", flush=True)
+    # print(f"[INFO] Tempo totale per salvataggio file txt: {t_txt_end:.2f} s", flush=True)
+    # print(f"[INFO] Tempo totale per salvataggio file txt (solo I/O): {t_txt_end_2:.2f} s", flush=True)
+    # print(f"[INFO] Tempo totale per salvataggio file txt (solo conversione + formattazione): {t_txt_end_3:.2f} s", flush=True)
+
 
     # 保存所有预测框结果，后续用于MR的计算 = Salvare tutti i risultati dei bounding box predetti, da utilizzare successivamente per il calcolo del MR.
     if save_txt:

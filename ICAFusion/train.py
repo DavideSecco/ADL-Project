@@ -16,8 +16,7 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 import torch.utils.data
 import yaml
-from torch.cuda import amp # da un warning, ma usare l'altra versione forse è peggio, da testare
-# from torch import amp
+from torch import amp # modificato perchè la versione originale dava warning
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from tqdm import tqdm
@@ -41,10 +40,11 @@ import global_var
 
 
 def train_rgb_ir(hyp, opt, device, tb_writer=None):
-    os.environ["WANDB_MODE"] = "offline"
-    logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
-    save_dir, epochs, batch_size, total_batch_size, weights, rank = \
-        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank
+    if opt.local_rank in [-1, 0]:    
+        os.environ["WANDB_MODE"] = "offline"
+        logger.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
+
+    save_dir, epochs, batch_size, total_batch_size, weights, rank = Path(opt.save_dir), opt.epochs, opt.batch_size, opt.total_batch_size, opt.weights, opt.global_rank
 
     # Directories
     wdir = save_dir / 'weights'
@@ -157,6 +157,11 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
         if any(x in k for x in freeze):
             print('freezing %s' % k)
             v.requires_grad = False
+    
+    # Test:
+    for n, p in model.named_parameters():
+        if ".crosstransformer." in n:
+            p.requires_grad = False
 
     # Optimizer
     nbs = 64  # nominal batch size
@@ -259,7 +264,7 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
     # Process 0
     if rank in [-1, 0]:
         print("Creating testing dataloader...", flush=True)
-        testloader, testdata = create_dataloader_rgb_ir(test_path_rgb, test_path_ir,imgsz_test, 1, gs, opt,
+        testloader, testdata = create_dataloader_rgb_ir(test_path_rgb, test_path_ir,imgsz_test, batch_size, gs, opt,
                                                         hyp=hyp, cache=opt.cache_images and not opt.notest, rect=True,
                                                         rank=-1, world_size=opt.world_size, workers=opt.workers,
                                                         pad=0.5, prefix=colorstr('val: '))
@@ -284,6 +289,7 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
         model = DDP(model, device_ids=[opt.local_rank], output_device=opt.local_rank,
                     # nn.MultiheadAttention incompatibility with DDP https://github.com/pytorch/pytorch/issues/26698
                     find_unused_parameters=any(isinstance(layer, nn.MultiheadAttention) for layer in model.modules()))
+        print(f"model in DDP mode: {model}" )
 
     # Model parameters
     hyp['box'] *= 3. / nl  # scale to layers
@@ -302,8 +308,9 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
     # nw = min(nw, (epochs - start_epoch) / 2 * nb)  # limit warmup to < 1/2 of training
     maps = np.zeros(nc)  # mAP per class
     # MRresult = 0.0
-    MRresult = [0.0 for indx in range(0,10)]       # tentativo, perchè se faccio il train ad ogni epoca, deve essere una lista
-    results = (0, 0, 0, 0, 0, 0, 0)  # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
+    MRresult = [0.0 for indx in range(0,10)]        # tentativo, perchè se faccio se non faccio il test deve essere una lista
+    # results = (0, 0, 0, 0, 0, 0, 0)               # P, R, mAP@.5, mAP@.5-.95, val_loss(box, obj, cls)
+    results =   (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)   # tentativo, perchè se non faccio il test deve essere una lista con anche TP, FP, FN, F1! nella val loss c'è anche rank
     scheduler.last_epoch = start_epoch - 1  # do not move
     scaler = amp.GradScaler(enabled=cuda)
     compute_loss = ComputeLoss(model)  # init loss class
@@ -337,7 +344,24 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
         if rank != -1:
             dataloader.sampler.set_epoch(epoch)
         pbar = enumerate(dataloader)
-        logger.info(('\n' + '%10s' * 8) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'rank', 'labels', 'img_size'))
+        # logger.info(('\n' + '%12s' * 8) % ('Epoch', 'gpu_mem', 'box', 'obj', 'cls', 'rank', 'labels', 'img_size'))
+        col_specs = [
+            ('Epoch', 10),
+            ('gpu_mem', 10),
+            ('loss', 18),
+            ('batch_box_loss', 18),
+            ('batch_obj_loss', 18),
+            ('batch_cls_loss', 18),
+            ('batch_rank_loss', 18),
+            ('mean_box_loss', 18),
+            ('mean_obj_loss', 18),
+            ('mean_cls_loss', 18),
+            ('mean_rank_loss', 18),
+            ('labels', 16),
+            ('img_size', 16),
+        ]
+        header_fmt = '\n' + ' '.join(f"{{:^{w}}}" for _, w in col_specs)
+        logger.info(header_fmt.format(*[name for name, _ in col_specs]))
         if rank in [-1, 0]:
             pbar = tqdm(pbar, total=nb)  # progress bar
         optimizer.zero_grad()
@@ -383,12 +407,16 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                     imgs = F.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
             # Forward
-            with amp.autocast(enabled=cuda):
+            with amp.autocast(enabled=cuda, device_type="cuda"):    # modificato perchè la nuova versione prende anche "device_type"
                 # pred = model(imgs)  # forward
                 pred = model(imgs_rgb, imgs_ir)  # forward
-                loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
+                loss, loss_items, bs = compute_loss(pred, targets.to(device))  # loss scaled by batch_size: loss = (lbox + lobj + lcls + lrk)*bs
+                # print(f"loss {loss} loss_items: {loss_items}", flush=True)
+
+                # Secondo gpt è inutile!
                 if rank != -1:
                     loss *= opt.world_size  # gradient averaged between devices in DDP mode
+
                 if opt.quad:
                     loss *= 4.
 
@@ -422,7 +450,24 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                 #
                 # Infine, pbar.set_description(s) mostra questa stringa come descrizione della
                 # progress bar, permettendo di monitorare andamento training con valori leggibili.
-                s = ('%10s' * 2 + '%10.4g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
+                # s = ('%10s' * 2 + '%10.4g' * 6) % ('%g/%g' % (epoch, epochs - 1), mem, *mloss, targets.shape[0], imgs.shape[-1])
+                mean_box_loss, mean_obj_loss, mean_cls_loss, mean_rank_loss = (x.item() for x in mloss) # estraggo le loss cosi da poterle stampare con le rispettive labels
+                batch_box_loss, batch_obj_loss, batch_cls_loss, batch_rank_loss = (x.item() for x in loss_items) # estraggo le loss cosi da poterle stampare con le rispettive labels
+                s = (
+                    f"{epoch:>4d}/{epochs - 1:<4d}  "
+                    f"{mem:<8}  "
+                    f"{'loss=':>8}{loss.item()/bs:<10.6g}  "        # Divido perchè la loss era stata moltiplicata per la batch size dalla funzione compute_loss
+                    f"{'batch_box_loss=':>8}{batch_box_loss:<10.6g}  "
+                    f"{'batch_obj_loss=':>8}{batch_obj_loss:<10.6g}  "
+                    f"{'batch_cls_loss=':>8}{batch_cls_loss:<10.6g}  "
+                    f"{'batch_rank_loss=':>8}{batch_rank_loss:<10.6g}  "
+                    f"{'mean_box_loss=':>8}{mean_box_loss:<10.6g}  "
+                    f"{'mean_obj_loss=':>8}{mean_obj_loss:<10.6g}  "
+                    f"{'mean_cls_loss=':>8}{mean_cls_loss:<10.6g}  "
+                    f"{'mean_rank_loss=':>8}{mean_rank_loss:<10.6g}  "       
+                    f"{'targets=':>8}{targets.shape[0]:<6d}  "
+                    f"{'img=':>4}{imgs.shape[-1]:<4d}"
+                )
                 pbar.set_description(s)
 
                 if ni < 3:
@@ -443,11 +488,11 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
             # mAP
             ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride', 'class_weights'])
             final_epoch = epoch + 1 == epochs
-            if not opt.notest or final_epoch:  # Calculate mAP
+            if not opt.notest: # or final_epoch
                 wandb_logger.current_epoch = epoch + 1
                 print("Calling test.test() from test.py", flush=True)
                 results, maps, MRresult, times = test.test(data_dict,
-                                                           batch_size=1,
+                                                           batch_size=batch_size,
                                                            imgsz=imgsz_test,
                                                            model=ema.ema,
                                                            single_cls=opt.single_cls,
@@ -470,13 +515,13 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                     'x/lr0', 'x/lr1', 'x/lr2',  # learning rate
                     'MR_all', 'MR_day', 'MR_night', 'MR_near', 'MR_medium', 'MR_far', 'MR_none', 'MR_partial', 'MR_heavy', 'Recall_all'  # MR
                     ]
-            print(type(MRresult))
-            print(f"MRresult: {MRresult}")
-            print(f"len(MRresult) {len(MRresult)}")
             vals = list(mloss) + list(results) + lr + MRresult
             dicts = {k: v for k, v in zip(keys, vals)}  # dict
-            print(f"dicts {dicts}")
+            n = len(dicts) + 1  # number of cols
             file = save_dir / 'results.csv'
+            s = '' if file.exists() else (('%s,' * n % tuple(['epoch'] + keys)).rstrip(',') + '\n')  # add header
+            with open(file, 'a') as f:
+                f.write(s + ('%g,' * n % tuple([epoch] + vals)).rstrip(',') + '\n')
 
             # Update best mAP
             fi = fitness(np.array(results).reshape(1, -1))  # weighted combination of [P, R, mAP@.5, mAP@.5-.95]
@@ -502,13 +547,12 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                 if best_fitness == fi:
                     torch.save(ckpt, best)
                 
-                  # --- AGGIUNTA: salva SOLO lo state_dict, portabile e pronto per transfer learning
+                # --- AGGIUNTA: salva SOLO lo state_dict, portabile e pronto per transfer learning
                 state_dict = (model.module if is_parallel(model) else model).state_dict()
                 torch.save(state_dict, last.parent / 'model_state_dict_only.pth')      # attenzione e' direttamente il model state dict! Non esistera' quindi una chiave "model"
                 if best_fitness == fi:
                     torch.save(state_dict, last.parent / 'best_model_state_dict_only.pth')
                 # --- FINE AGGIUNTA
-
 
                 if wandb_logger.wandb:
                     if ((epoch + 1) % opt.save_period == 0 and not final_epoch) and opt.save_period != -1:
@@ -530,9 +574,11 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                                               if (save_dir / f).exists()]})
         # Test best.pt
         logger.info('%g epochs completed in %.3f hours.\n' % (epoch - start_epoch + 1, (time.time() - t0) / 3600))
-        for m in (last, best) if best.exists() else (last):  # speed, mAP tests
+        # for m in (last, best) if best.exists() else (last):  # speed, mAP tests
+        for m in ((best,) if best.exists() else (last,)):
+            logger.info(f"Running test with: {m}")
             results, _, MRresult, _ = test.test(opt.data,
-                                                batch_size=1,
+                                                batch_size=batch_size,
                                                 imgsz=imgsz_test,
                                                 conf_thres=0.001,
                                                 iou_thres=0.5,
@@ -540,10 +586,10 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                                                 single_cls=opt.single_cls,
                                                 dataloader=testloader,
                                                 save_dir=save_dir,
-                                                save_txt=True,
+                                                save_txt=True, # True
                                                 save_conf=True,
                                                 save_json=False,
-                                                plots=False,
+                                                plots=True, # mi salvo alcune predizioni
                                                 is_coco=is_coco,
                                                 labels_list=labels_list,
                                                 verbose=nc > 1,
@@ -561,7 +607,9 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
                                             name='run_' + wandb_logger.wandb_run.id + '_model',
                                             aliases=['last', 'best', 'stripped'])
         wandb_logger.finish_run()
-    else:
+
+    # destroy anche sullo 0, altrimenti rimane attivo
+    if rank != -1:
         dist.destroy_process_group()
     torch.cuda.empty_cache()
     return results
@@ -611,6 +659,10 @@ if __name__ == '__main__':
     global_var._init()
     global_var.set_value('flag_visual_training_dataset', False)
 
+    # Leggi i rank da env impostate da torchrun
+    if opt.local_rank == -1:
+        opt.local_rank = int(os.environ.get("LOCAL_RANK", -1))
+    
     # Set DDP variables
     opt.world_size = int(os.environ['WORLD_SIZE']) if 'WORLD_SIZE' in os.environ else 1
     opt.global_rank = int(os.environ['RANK']) if 'RANK' in os.environ else -1
@@ -619,8 +671,30 @@ if __name__ == '__main__':
         # check_git_status()
         check_requirements()
 
+    # DDP mode
+    if opt.local_rank != -1:
+        print("MODALITA DISTRIBUTA")
+        print(f"torch.cuda.device_count() {torch.cuda.device_count()}")
+        assert torch.cuda.device_count() > opt.local_rank
+        torch.cuda.set_device(opt.local_rank)
+        device = torch.device('cuda', opt.local_rank)
+        dist.init_process_group(backend='nccl', init_method='env://')  # distributed backend
+        assert opt.batch_size % opt.world_size == 0, '--batch-size must be multiple of CUDA device count'
+        opt.total_batch_size = opt.batch_size
+        opt.batch_size = opt.total_batch_size // opt.world_size
+    else:
+        print("MODALITA SINGLE-GPU")
+        opt.total_batch_size = opt.batch_size
+        device = select_device(opt.device, batch_size=opt.batch_size)
+
     # Resume
-    wandb_run = check_wandb_resume(opt)
+    if opt.local_rank in [-1, 0]: 
+        wandb_run = check_wandb_resume(opt)
+    else: 
+        os.environ["WANDB_DISABLED"] = "true"
+        wandb_run = False
+        # wandb_run = None
+
     if opt.resume and not wandb_run:  # resume an interrupted run
         ckpt = opt.resume if isinstance(opt.resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(ckpt), 'ERROR: --resume checkpoint does not exist'
@@ -638,17 +712,6 @@ if __name__ == '__main__':
         opt.name = 'evolve' if opt.evolve else opt.name
         opt.save_dir = str(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok | opt.evolve))
 
-    # DDP mode
-    opt.total_batch_size = opt.batch_size
-    device = select_device(opt.device, batch_size=opt.batch_size)
-    if opt.local_rank != -1:
-        assert torch.cuda.device_count() > opt.local_rank
-        torch.cuda.set_device(opt.local_rank)
-        device = torch.device('cuda', opt.local_rank)
-        dist.init_process_group(backend='nccl', init_method='env://')  # distributed backend
-        assert opt.batch_size % opt.world_size == 0, '--batch-size must be multiple of CUDA device count'
-        opt.batch_size = opt.total_batch_size // opt.world_size
-
     # Hyperparameters
     with open(opt.hyp) as f:
         hyp = yaml.safe_load(f)  # load hyps
@@ -658,18 +721,14 @@ if __name__ == '__main__':
     print(f"opt.evolve: {opt.evolve}", flush=True)
     logger.info(opt)
     if not opt.evolve:
-        tb_writer = None  # init loggers
+        tb_writer = SummaryWriter(opt.save_dir) if opt.global_rank in (-1, 0) else None
         if opt.global_rank in [-1, 0]:
+
             prefix = colorstr('tensorboard: ')
             logger.info(f"{prefix}Start with 'tensorboard --logdir {opt.project}', view at http://localhost:6006/")
             tb_writer = SummaryWriter(opt.save_dir)  # Tensorboard
 
-            print(f"opt: {opt}", flush=True)
-            print(f"hyp: {hyp}", flush=True)
-            print(f"device: {device}", flush=True)
-            print(f"Launching train_rgb_ir", flush=True)
-            train_rgb_ir(hyp, opt, device, tb_writer)
-
+        train_rgb_ir(hyp, opt, device, tb_writer)
     # Evolve hyperparameters (optional)
     else:
         # Hyperparameter evolution metadata (mutation scale 0-1, lower_limit, upper_limit)
