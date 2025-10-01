@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # ===== Parametri GLOBALI (validi per tutti i modelli) =====
-export EPOCHS=10
+export EPOCHS=12
 export PER_GPU=28
 export IMG_TRAIN=640
 export IMG_TEST=640
@@ -33,7 +33,7 @@ DRY_RUN=0
 # ===== Lista dei MODELLI =====
 MODELS=(
   no_pretrained
-  decur_original
+  # decur_original
   decur
   densecl
   decurdensecl
@@ -58,7 +58,7 @@ wait_for_slots() {
 
 for MODEL in "${MODELS[@]}"; do
   # RUN_TAG con %j (jobid) per allineare nome log = RUN_TAG
-  RUN_TAG_PATTERN="$gpu-${WORLD_SIZE}_dataset-${DATA_VERSION_SHORT}_epochs-${EPOCHS}_{MODEL}_%j"
+  RUN_TAG_PATTERN="gpu-${WORLD_SIZE}_dataset-${DATA_VERSION_SHORT}_epochs-${EPOCHS}_${MODEL}_%j"
 
   JOB_NAME="${RUN_TAG_PATTERN}"        # job-name = RUN_TAG
   OUT_PATH="logs/${RUN_TAG_PATTERN}.out"
@@ -77,12 +77,12 @@ for MODEL in "${MODELS[@]}"; do
   # Esporta variabili globali e specifiche che userà il body del job
   # Nota: inviamo lo script su STDIN (qui-doc). Le option --job-name/--output/--error sono impostate fuori.
   sbatch \
-    --partition=qgpu \
+    --partition=qgpu_free \
     --account=eu-25-19 \
     --nodes=${NNODES} \
     --gpus-per-node=${NGPUS} \
     --cpus-per-task=8 \
-    --time=24:00:00 \
+    --time=18:00:00 \
     --job-name="${JOB_NAME}" \
     --output="${OUT_PATH}" \
     --error="${ERR_PATH}" \
