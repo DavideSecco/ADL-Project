@@ -141,9 +141,11 @@ class DenseCL(nn.Module):
 
         return x_gather[idx_this]
 
+
+
     def forward_train(self, im_q, im_k, **kwargs):
         # compute query features
-        q_b = self.encoder_q[0](im_q) # backbone features
+        q_b = self.encoder_q[0](im_q)           # backbone features
         q, q_grid, q2 = self.encoder_q[1](q_b)  # queries: NxC; NxCxS^2
         q_b = q_b[0]
         q_b = q_b.view(q_b.size(0), q_b.size(1), -1)
@@ -152,6 +154,9 @@ class DenseCL(nn.Module):
         q2 = nn.functional.normalize(q2, dim=1)
         q_grid = nn.functional.normalize(q_grid, dim=1)
         q_b = nn.functional.normalize(q_b, dim=1)
+
+        # aggiunta ora:
+        q_grid_dense = q_grid # NxCxS^2
 
         # compute key features
         with torch.no_grad():  # no gradient to keys
@@ -177,7 +182,6 @@ class DenseCL(nn.Module):
             k_b = self._batch_unshuffle_ddp(k_b, idx_unshuffle)
 
         # compute logits
-        # Einstein sum is more intuitive
         # positive logits: Nx1
         l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
         # negative logits: NxK
@@ -188,7 +192,7 @@ class DenseCL(nn.Module):
         densecl_sim_ind = backbone_sim_matrix.max(dim=2)[1] # NxS^2
 
         indexed_k_grid = torch.gather(k_grid, 2, densecl_sim_ind.unsqueeze(1).expand(-1, k_grid.size(1), -1)) # NxCxS^2
-        densecl_sim_q = (q_grid * indexed_k_grid).sum(1) # NxS^2
+        densecl_sim_q  = (q_grid * indexed_k_grid).sum(1) # NxS^2
 
         l_pos_dense = densecl_sim_q.view(-1).unsqueeze(-1) # NS^2X1
 
@@ -197,7 +201,7 @@ class DenseCL(nn.Module):
         l_neg_dense = torch.einsum('nc,ck->nk', [q_grid, self.queue2.clone().detach()])
 
         loss_single = self.head(l_pos, l_neg)['loss_contra']
-        loss_dense  =  self.head(l_pos_dense, l_neg_dense)['loss_contra']
+        loss_dense  = self.head(l_pos_dense, l_neg_dense)['loss_contra']
 
         #losses = dict()
         #losses['loss_contra_single'] = loss_single * (1 - self.loss_lambda)
@@ -209,7 +213,10 @@ class DenseCL(nn.Module):
         self._dequeue_and_enqueue(k)
         self._dequeue_and_enqueue2(k2)
         
-        return loss_contra_single, loss_contra_dense, q2
+        # ritornare qui q_grid
+        return loss_contra_single, loss_contra_dense, q2, q_grid_dense
+
+
 
     def forward_test(self, img, **kwargs):
         im_q = img.contiguous()
@@ -219,6 +226,8 @@ class DenseCL(nn.Module):
         q_grid = q_grid.view(q_grid.size(0), q_grid.size(1), -1)
         q_grid = nn.functional.normalize(q_grid, dim=1)
         return None, q_grid, None
+
+
 
     def forward(self, im_q, im_k, mode='train', **kwargs):
         # per il training, ci aspettiamo im_q e im_k
@@ -231,6 +240,7 @@ class DenseCL(nn.Module):
         #    return self.backbone(img)
         # else:
         #    raise Exception("No such mode: {}".format(mode))
+
 
 
 # utils
