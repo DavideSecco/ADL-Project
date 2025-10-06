@@ -32,12 +32,11 @@ from src.models.densedecur          import DenseDeCUR
 from src.dataio.kaist_dataset_list  import KAISTDatasetFromList
 from src.dataio.loader              import build_kaist_transforms
 
-
 # method
 parser = argparse.ArgumentParser(description='Multimodal Self-Supervised Pretraining')
 parser.add_argument('--dataset', type=str, choices=['KAIST'])  
 parser.add_argument('--method',  type=str, choices=['DeCUR','DenseCL','DenseDeCUR'])   
-parser.add_argument('--densecl_stream', type=str, default='rgb', choices=['rgb','thermal'])                  
+parser.add_argument('--densecl_stream', type=str, default='rgb', choices=['rgb','thermal'])                 
 
 # training hyperparameters
 parser.add_argument('--workers', default=8, type=int)
@@ -53,7 +52,7 @@ parser.add_argument('--lr',  default=0.2, type=float)
 parser.add_argument('--cos', action='store_true', default=False)
 parser.add_argument('--schedule', default=[120,160], nargs='*', type=int)
 
-# decur hyperparameters
+# (dense)decur hyperparameters
 parser.add_argument('--lambd', default=0.0051, type=float)
 parser.add_argument('--projector', default='8192-8192-8192', type=str)
 parser.add_argument('--dim_common', type=int, default=6144)
@@ -72,6 +71,10 @@ parser.add_argument("--dist_url", default="env://", type=str)
 parser.add_argument("--world_size", default=-1, type=int, help='set automatically')
 parser.add_argument("--rank", default=0, type=int, help='set automatically')
 parser.add_argument('--seed', type=int, default=42)
+
+# new arguments (to play around with)
+parser.add_argument('--baseline', action='store_true', default=False) 
+parser.add_argument("--optimizer", type=str, default='sgd', choices=['sgd','lars'])
 
 
 
@@ -147,13 +150,13 @@ def main_worker(gpu, args):
     # select model
     if args.method == 'DeCUR':
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = DeCUR(args).to(device)
+        model  = DeCUR(args).to(device)
     elif args.method == 'DenseCL':        
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = DenseCL(pretrained=True).to(device)
+        model  = DenseCL(pretrained=True).to(device)
     elif args.method == 'DenseDeCUR':
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        model = DenseDeCUR(args).to(device)
+        model  = DenseDeCUR(args).to(device)
 
 
     param_weights = []
@@ -166,6 +169,7 @@ def main_worker(gpu, args):
     parameters = [{'params': param_weights}, {'params': param_biases}]
     
 
+    # select training modality
     if torch.cuda.is_available():
         model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu_to_work_on])
@@ -176,20 +180,18 @@ def main_worker(gpu, args):
 
     # select optmizer
     if args.method == 'DeCUR':
-        args.lr = 0
-        optimizer = LARS(parameters, lr=args.lr, weight_decay=1e-4, weight_decay_filter=True, lars_adaptation_filter=True)
-    
-    
+        # args.lr = 0
+        # optimizer = LARS(parameters, lr=args.lr, weight_decay=1e-4, weight_decay_filter=True, lars_adaptation_filter=True)
+        optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=0.9, weight_decay=1e-4)
     elif args.method == 'DenseCL':
-        args.lr = 0.015 # se batch size = 128
+        args.lr = 0.015 # if batch size = 128
         optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
-    
-    
     elif args.method == 'DenseDeCUR':
-        optimizer = LARS(parameters, lr=0, weight_decay=1e-4, weight_decay_filter=True, lars_adaptation_filter=True)
-        # optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=0.9, weight_decay=1e-4)
-
-
+        if args.optimizer == 'lars':
+            optimizer = LARS(parameters, lr=0, weight_decay=1e-4, weight_decay_filter=True, lars_adaptation_filter=True)
+        elif args.optimizer == 'sgd':
+            args.lr = 0.015
+            optimizer = torch.optim.SGD(model.parameters(), args.lr, momentum=0.9, weight_decay=1e-4)
 
 
     # automatically resume from checkpoint if it exists
@@ -224,8 +226,14 @@ def main_worker(gpu, args):
         drop_last=True)
 
 
-    print(f"[INFO] Training method: {args.method}" + (f", DenseCL stream: {args.densecl_stream}" if args.method == 'DenseCL' else ""))
+    print(f"[INFO] Training method: {args.method}"
+            + (f", stream: {args.densecl_stream}" if args.method == 'DenseCL' else "")
+            + (", baseline" if (args.method == 'DenseDeCUR' and args.baseline)
+                else (", not baseline" if args.method == 'DenseDeCUR' else "")
+            )
+        )
     
+
     start_time = time.time()
     scaler = torch.cuda.amp.GradScaler()
     
@@ -248,22 +256,21 @@ def main_worker(gpu, args):
             
             with torch.cuda.amp.autocast():
                 
-                if args.method=='DeCUR': # ok 100%
-                    loss1,loss2,loss12,on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
+                if args.method=='DeCUR': 
+                    loss1, loss2, loss12, on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
                     loss = (loss1 + loss2 + loss12) / 3
 
-                elif args.method=='DenseCL': # ok 100%
+                elif args.method=='DenseCL': 
                     if args.densecl_stream == 'rgb':
-                        im_q, im_k = y1_1, y1_2  # RGB
+                        im_q, im_k = y1_1, y1_2  # rgb
                     elif args.densecl_stream == 'thermal':
-                        im_q, im_k = y2_1, y2_2  # Thermal
+                        im_q, im_k = y2_1, y2_2  # thermal
                     loss_global, loss_dense, _ = model.forward(im_q, im_k) 
                     loss = loss_global + loss_dense 
 
 
-
                 if args.method=='DenseDeCUR':
-                    loss1,loss2,loss12,on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
+                    loss1, loss2, loss12, on_diag12_c = model.forward(y1_1, y1_2, y2_1, y2_2)
                     loss = (loss1 + loss2 + loss12) / 3
 
 
@@ -281,8 +288,6 @@ def main_worker(gpu, args):
                         stats = dict(epoch=epoch, step=step, loss=loss.item(), loss_global=loss_global.item(), loss_dense=loss_dense.item())
                     elif args.method=='DenseDeCUR':
                         stats = dict(epoch=epoch, step=step, loss=loss.item(), loss1=loss1.item(), loss2=loss2.item(), loss12=loss12.item(), on_diag12_c=on_diag12_c.item())
-                    
-
 
                     if step == 0 and epoch == 0 and args.rank == 0:
                         header = " ".join(f"{k:<12}" for k in stats.keys())
@@ -297,10 +302,30 @@ def main_worker(gpu, args):
             
         
         # save checkpoint
-        if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
-            state = dict(epoch=epoch + 1, model=model.state_dict(), optimizer=optimizer.state_dict())
-            torch.save(state, args.checkpoint_dir / 'decur_checkpoint_{:04d}.pth'.format(epoch))
-            tb_writer.add_scalars('training log',stats,epoch)
+        if args.method=='DeCUR':
+            if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
+                state = dict(epoch=epoch + 1, model=model.state_dict(), optimizer=optimizer.state_dict())
+                torch.save(state, args.checkpoint_dir / 'decur_checkpoint_{:04d}.pth'.format(epoch))
+                tb_writer.add_scalars('training log',stats,epoch)
+        elif args.method=='DenseCL' and args.densecl_stream == 'rgb':
+            if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
+                state = dict(epoch=epoch + 1, model=model.state_dict(), optimizer=optimizer.state_dict())
+                torch.save(state, args.checkpoint_dir / 'densecl_rgb_checkpoint_{:04d}.pth'.format(epoch))
+                tb_writer.add_scalars('training log',stats,epoch)
+        elif args.method=='DenseCL' and args.densecl_stream == 'thermal':
+            if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
+                state = dict(epoch=epoch + 1, model=model.state_dict(), optimizer=optimizer.state_dict())
+                torch.save(state, args.checkpoint_dir / 'densecl_thermal_checkpoint_{:04d}.pth'.format(epoch))
+                tb_writer.add_scalars('training log',stats,epoch)
+        elif args.method=='DenseDeCUR':
+            if args.rank == 0 and (epoch % 100 == 0 or epoch == args.epochs - 1):
+
+                tag  = "baseline" if args.baseline else "notbaseline"
+                name = f"densedecur_{tag}_{args.optimizer}_ep{epoch:04d}.pth"
+
+                state = dict(epoch=epoch + 1, model=model.state_dict(), optimizer=optimizer.state_dict())
+                torch.save(state, args.checkpoint_dir / name)
+                tb_writer.add_scalars('training log',stats,epoch)
  
             
 
@@ -335,18 +360,6 @@ def adjust_learning_rate(args, optimizer, epoch):
             
         for g in optimizer.param_groups:
                 g['lr'] = lr_t
-
-
-     
-
-def handle_sigusr1(signum, frame):
-    os.system(f'scontrol requeue {os.getenv("SLURM_JOB_ID")}')
-    exit()
-
-
-
-def handle_sigterm(signum, frame):
-    pass
 
 
 

@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=pretrain_densedecur
+#SBATCH --job-name=pretrain_DeCUR
 #SBATCH --account=eu-25-19
-#SBATCH --partition=qgpu_free
+#SBATCH --partition=qgpu
 #SBATCH --nodes=1
 #SBATCH --gpus=1
 #SBATCH --time=12:00:00
-#SBATCH --output=logs/%x-%j.out
-#SBATCH --error=logs/%x-%j.err
+#SBATCH --output=logs/pretrain_densecl_rgb.out
+#SBATCH --error=logs/pretrain_densecl_rgb.err
 
 
 echo "Starting"
@@ -23,19 +23,17 @@ source venv/bin/activate
 export RANK=0
 export WORLD_SIZE=1
 export MASTER_ADDR=127.0.0.1
-export MASTER_PORT=29518
+export MASTER_PORT=29502
 export CUDA_LAUNCH_BLOCKING=1
 
 
 python /mnt/proj3/eu-25-19/davide_secco/ADL-Project/DenseDeCUR/main.py \
   --dataset KAIST \
-  --method DenseDeCUR \
+  --method DenseCL \
+  --densecl_stream rgb \
   --batch-size 128 \
   --epochs 200 \
   --print-freq 20 \
-  --dim_common 384 \
-  --optimizer sgd \
-  --projector 512-512-512 
 
 
   echo "Ending"
