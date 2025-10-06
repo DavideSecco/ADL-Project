@@ -58,7 +58,7 @@ wait_for_slots() {
 
 for MODEL in "${MODELS[@]}"; do
   # RUN_TAG con %j (jobid) per allineare nome log = RUN_TAG
-  RUN_TAG_PATTERN="gpu-${WORLD_SIZE}_dataset-${DATA_VERSION_SHORT}_epochs-${EPOCHS}_${MODEL}_%j"
+  RUN_TAG_PATTERN="gpu-${WORLD_SIZE}_dataset-${DATA_VERSION_SHORT}_epochs-${EPOCHS}_${MODEL}"
 
   JOB_NAME="${RUN_TAG_PATTERN}"        # job-name = RUN_TAG
   OUT_PATH="logs/${RUN_TAG_PATTERN}.out"
@@ -168,7 +168,7 @@ case "$MODEL" in
 esac
 
 # ===== RUN_NAME (directory di run) =====
-RUN_NAME="icafusion_${WORLD_SIZE}gpu_${RUN_TAG}"
+RUN_NAME="${RUN_TAG}"
 
 echo "[INFO] NGPUS=$NGPUS NNODES=$NNODES WORLD_SIZE=$WORLD_SIZE TOTAL_BATCH=$TOTAL_BATCH"
 echo "[INFO] EPOCHS=$EPOCHS PER_GPU=$PER_GPU IMG=[$IMG_TRAIN,$IMG_TEST] WORKERS=$WORKERS"
