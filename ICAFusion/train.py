@@ -578,7 +578,7 @@ def train_rgb_ir(hyp, opt, device, tb_writer=None):
         for m in ((best,) if best.exists() else (last,)):
             logger.info(f"Running test with: {m}")
             results, _, MRresult, _ = test.test(opt.data,
-                                                batch_size=batch_size,
+                                                batch_size=batch_size, # da verificare che non serva 1 (da cambiare anche sopra!)
                                                 imgsz=imgsz_test,
                                                 conf_thres=0.001,
                                                 iou_thres=0.5,
