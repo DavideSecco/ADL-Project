@@ -5,6 +5,19 @@ du -h --max-depth=1
 du -sh * | sort -h 
 for d in */; do echo "$d: $(find "$d" -type f | wc -l)"; done
 
+Per liberare spazio su karolina: rm -rf /home/it4i-seccod/.local/share/wandb
+
+### Per conoscere cosa c'è di disponibile su karolina e i limiti
+sinfo -o "%P %a %l %F %D"
+
+### Per sapere le partizioni ok per il tuo account:
+sacctmgr show assoc where user=$USER format=Account,Partition,QOS,DefaultQOS%20
+
+### Puoi usare questo: 
+qgpu_exp up 1:00:00 66/6/0/72 72
+qgpu_free up 18:00:00 66/6/0/72 72
+qgpu_preempt up 12:00:00 66/6/0/72 72
+
 
 #### Dataset 
 - [X] Dataset KAIST:
@@ -35,7 +48,7 @@ to write...
   - [ ] setup della repo in locale [Marco]
   - [X] Setup della repo su karolina [Davide]
 
-  - [ ] controlla score_thr per visualizzazione
+  - [X] controlla score_thr per visualizzazione: 0.25
 
   - [ ] Training da fare:
     - [ ] No pretrained weights:
